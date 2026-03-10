@@ -50,6 +50,7 @@ export interface Settings {
   isAppLocked: boolean;
   biometricEnabled: boolean;
   pinCode: string | null;
+  operationPassword: string | null;
   theme: 'light' | 'dark' | 'system';
   defaultCategories: boolean;
   autoBackup: boolean;

@@ -17,12 +17,13 @@ import { formatCurrency, formatDate, getDateRange, showAlert } from '../../src/u
 import { Transaction } from '../../src/types';
 import { TransactionRepository } from '../../src/database/repository';
 import { format } from 'date-fns';
+import { PasswordModal } from '../../src/components/PasswordModal';
 
 type TimeFilter = 'day' | 'week' | 'month' | 'year' | 'all';
 type TypeFilter = 'all' | 'income' | 'expense';
 
 export default function RecordsScreen() {
-  const { categories, deleteTransactions, refreshTransactions, transactions: storeTransactions } = useAppStore();
+  const { categories, deleteTransactions, refreshTransactions, transactions: storeTransactions, settings } = useAppStore();
   
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('day');
@@ -33,6 +34,13 @@ export default function RecordsScreen() {
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     loadTransactions();
@@ -118,6 +126,59 @@ export default function RecordsScreen() {
         }
       ]
     );
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    if (settings?.operationPassword) {
+      setPendingAction(() => () => {
+        setEditingTransaction(transaction);
+        setEditAmount(String(transaction.amount));
+        setEditNote(transaction.note || '');
+        setShowEditModal(true);
+      });
+      setShowPasswordModal(true);
+    } else {
+      setEditingTransaction(transaction);
+      setEditAmount(String(transaction.amount));
+      setEditNote(transaction.note || '');
+      setShowEditModal(true);
+    }
+  };
+
+  const handlePasswordConfirm = (password: string) => {
+    if (password === settings?.operationPassword) {
+      setShowPasswordModal(false);
+      setPasswordError(false);
+      if (pendingAction) {
+        pendingAction();
+        setPendingAction(null);
+      }
+    } else {
+      setPasswordError(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTransaction) return;
+    
+    const newAmount = parseFloat(editAmount);
+    if (isNaN(newAmount) || newAmount <= 0) {
+      showAlert('错误', '请输入有效金额');
+      return;
+    }
+    
+    await TransactionRepository.update(editingTransaction.id, {
+      amount: newAmount,
+      note: editNote
+    });
+    
+    setShowEditModal(false);
+    setEditingTransaction(null);
+    setEditAmount('');
+    setEditNote('');
+    loadTransactions();
+    
+    showAlert('成功', '交易记录已修正');
   };
 
   const exitSelectMode = () => {
@@ -236,12 +297,20 @@ export default function RecordsScreen() {
         </View>
         
         {!isSelectMode && (
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={() => handleDeleteSingle(item)}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
-          </TouchableOpacity>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => handleEditTransaction(item)}
+            >
+              <Ionicons name="create-outline" size={18} color={colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDeleteSingle(item)}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            </TouchableOpacity>
+          </View>
         )}
       </TouchableOpacity>
     );
@@ -425,6 +494,92 @@ export default function RecordsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>修正交易记录</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                <Ionicons name="close" size={24} color={colors.text.secondary.light} />
+              </TouchableOpacity>
+            </View>
+
+            {editingTransaction && (
+              <>
+                <View style={styles.editInfo}>
+                  <Text style={styles.editCategory}>
+                    {editingTransaction.categoryIcon} {editingTransaction.categoryName}
+                  </Text>
+                  <Text style={[
+                    styles.editType,
+                    { color: editingTransaction.type === 'income' ? colors.success : colors.danger }
+                  ]}>
+                    {editingTransaction.type === 'income' ? '收入' : '支出'}
+                  </Text>
+                </View>
+
+                <Text style={styles.editLabel}>金额</Text>
+                <TextInput
+                  style={styles.editInput}
+                  placeholder="输入金额"
+                  placeholderTextColor={colors.text.secondary.light}
+                  keyboardType="decimal-pad"
+                  value={editAmount}
+                  onChangeText={setEditAmount}
+                />
+
+                <Text style={styles.editLabel}>备注</Text>
+                <TextInput
+                  style={[styles.editInput, styles.editInputNote]}
+                  placeholder="输入备注（可选）"
+                  placeholderTextColor={colors.text.secondary.light}
+                  value={editNote}
+                  onChangeText={setEditNote}
+                  multiline
+                />
+
+                <View style={styles.editButtons}>
+                  <TouchableOpacity
+                    style={[styles.editButtonModal, styles.editButtonCancel]}
+                    onPress={() => {
+                      setShowEditModal(false);
+                      setEditingTransaction(null);
+                    }}
+                  >
+                    <Text style={styles.editButtonCancelText}>取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.editButtonModal, styles.editButtonConfirm]}
+                    onPress={handleSaveEdit}
+                  >
+                    <Text style={styles.editButtonConfirmText}>保存</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <PasswordModal
+        visible={showPasswordModal}
+        title="验证密码"
+        message="请输入操作密码以修改交易记录"
+        onClose={() => {
+          setShowPasswordModal(false);
+          setPasswordError(false);
+          setPendingAction(null);
+        }}
+        onConfirm={handlePasswordConfirm}
+        isError={passwordError}
+        errorMessage="密码错误，请重试"
+      />
     </SafeAreaView>
   );
 }
@@ -606,6 +761,13 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginLeft: spacing.sm
   },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center'
+  },
+  editButton: {
+    padding: spacing.sm
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -683,6 +845,69 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
+    color: '#FFFFFF'
+  },
+  editInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.lg
+  },
+  editCategory: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.medium,
+    color: colors.text.primary.light
+  },
+  editType: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold
+  },
+  editLabel: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: colors.text.primary.light,
+    marginBottom: spacing.xs
+  },
+  editInput: {
+    fontSize: fontSize.lg,
+    color: colors.text.primary.light,
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md
+  },
+  editInputNote: {
+    height: 80,
+    textAlignVertical: 'top'
+  },
+  editButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.sm
+  },
+  editButtonModal: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center'
+  },
+  editButtonCancel: {
+    backgroundColor: colors.surface.light
+  },
+  editButtonConfirm: {
+    backgroundColor: colors.primary
+  },
+  editButtonCancelText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: colors.text.primary.light
+  },
+  editButtonConfirmText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
     color: '#FFFFFF'
   }
 });

@@ -21,6 +21,7 @@ import { TransactionRepository, CategoryRepository, AccountRepository, BudgetRep
 import { format } from 'date-fns';
 import { Platform } from 'react-native';
 import { Transaction, Category, Account, Settings } from '../../src/types';
+import { PasswordModal } from '../../src/components/PasswordModal';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -29,9 +30,17 @@ export default function SettingsScreen() {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [showLargeAmountModal, setShowLargeAmountModal] = useState(false);
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showSetPasswordModal, setShowSetPasswordModal] = useState(false);
   const [budgetAmount, setBudgetAmount] = useState('');
   const [warningThreshold, setWarningThreshold] = useState('');
   const [largeAmountThreshold, setLargeAmountThreshold] = useState('');
+  const [balanceAmount, setBalanceAmount] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     if (budget) {
@@ -78,6 +87,69 @@ export default function SettingsScreen() {
     setShowLargeAmountModal(false);
     setLargeAmountThreshold('');
     showAlert('成功', '大额确认阈值已更新');
+  };
+
+  const handleSetBalance = async () => {
+    const balance = parseFloat(balanceAmount);
+    
+    if (isNaN(balance) || balance < 0) {
+      showAlert('错误', '请输入有效金额');
+      return;
+    }
+    
+    await updateAccount({ balance });
+    setShowBalanceModal(false);
+    setBalanceAmount('');
+    showAlert('成功', `当前余额已设置为 ${formatCurrency(balance)}`);
+  };
+
+  const handleSetPassword = async () => {
+    if (newPassword.length < 4) {
+      showAlert('错误', '密码长度至少4位');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setPasswordError(true);
+      return;
+    }
+    
+    await updateSettings({ operationPassword: newPassword });
+    setShowSetPasswordModal(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError(false);
+    showAlert('成功', '操作密码已设置');
+  };
+
+  const verifyPasswordAndExecute = (action: () => void) => {
+    if (!settings?.operationPassword) {
+      action();
+      return;
+    }
+    
+    setPendingAction(() => action);
+    setShowPasswordModal(true);
+  };
+
+  const handlePasswordConfirm = (password: string) => {
+    if (password === settings?.operationPassword) {
+      setShowPasswordModal(false);
+      setPasswordError(false);
+      if (pendingAction) {
+        pendingAction();
+        setPendingAction(null);
+      }
+    } else {
+      setPasswordError(true);
+    }
+  };
+
+  const openBalanceModal = () => {
+    verifyPasswordAndExecute(() => {
+      setBalanceAmount(String(account?.balance || 0));
+      setShowBalanceModal(true);
+    });
   };
 
   const downloadFile = (content: string, fileName: string, mimeType: string) => {
@@ -366,7 +438,22 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'wallet',
             '当前余额',
-            formatCurrency(account?.balance || 0)
+            `${formatCurrency(account?.balance || 0)}（点击修改）`,
+            undefined,
+            openBalanceModal
+          )}
+          
+          {renderSettingItem(
+            'lock-closed',
+            '操作密码',
+            settings?.operationPassword ? '已设置' : '点击设置',
+            undefined,
+            () => {
+              setNewPassword('');
+              setConfirmPassword('');
+              setPasswordError(false);
+              setShowSetPasswordModal(true);
+            }
           )}
           
           {renderSettingItem(
@@ -479,7 +566,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.0'
+            '1.0.1'
           )}
           
           {renderSettingItem(
@@ -598,6 +685,127 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonConfirm]}
                 onPress={handleSetLargeAmountThreshold}
+              >
+                <Text style={styles.modalButtonConfirmText}>确定</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showBalanceModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowBalanceModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>设置当前余额</Text>
+            <Text style={styles.modalLabel}>直接设置您的存款余额</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="输入当前余额"
+              placeholderTextColor={colors.text.secondary.light}
+              keyboardType="decimal-pad"
+              value={balanceAmount}
+              onChangeText={setBalanceAmount}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setShowBalanceModal(false);
+                  setBalanceAmount('');
+                }}
+              >
+                <Text style={styles.modalButtonCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleSetBalance}
+              >
+                <Text style={styles.modalButtonConfirmText}>确定</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <PasswordModal
+        visible={showPasswordModal}
+        title="验证密码"
+        message="请输入操作密码以继续"
+        onClose={() => {
+          setShowPasswordModal(false);
+          setPasswordError(false);
+          setPendingAction(null);
+        }}
+        onConfirm={handlePasswordConfirm}
+        isError={passwordError}
+        errorMessage="密码错误，请重试"
+      />
+
+      <Modal
+        visible={showSetPasswordModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowSetPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>设置操作密码</Text>
+            <Text style={styles.modalLabel}>设置密码后，修改余额和交易需要验证</Text>
+            
+            <Text style={styles.inputLabel}>新密码</Text>
+            <TextInput
+              style={[styles.modalInput, passwordError && styles.inputError]}
+              placeholder="输入4-6位数字密码"
+              placeholderTextColor={colors.text.secondary.light}
+              secureTextEntry
+              keyboardType="number-pad"
+              maxLength={6}
+              value={newPassword}
+              onChangeText={(text) => {
+                setNewPassword(text);
+                setPasswordError(false);
+              }}
+            />
+            
+            <Text style={styles.inputLabel}>确认密码</Text>
+            <TextInput
+              style={[styles.modalInput, passwordError && styles.inputError]}
+              placeholder="再次输入密码"
+              placeholderTextColor={colors.text.secondary.light}
+              secureTextEntry
+              keyboardType="number-pad"
+              maxLength={6}
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                setPasswordError(false);
+              }}
+            />
+            
+            {passwordError && (
+              <Text style={styles.errorText}>两次密码输入不一致</Text>
+            )}
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setShowSetPasswordModal(false);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setPasswordError(false);
+                }}
+              >
+                <Text style={styles.modalButtonCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleSetPassword}
               >
                 <Text style={styles.modalButtonConfirmText}>确定</Text>
               </TouchableOpacity>
@@ -772,5 +980,22 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: fontWeight.medium,
     color: '#FFFFFF'
+  },
+  inputLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.text.primary.light,
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: colors.danger
+  },
+  errorText: {
+    fontSize: fontSize.sm,
+    color: colors.danger,
+    textAlign: 'center',
+    marginTop: spacing.xs
   }
 });
