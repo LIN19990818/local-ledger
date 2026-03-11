@@ -33,12 +33,14 @@ export default function SettingsScreen() {
   const [showBalanceModal, setShowBalanceModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showSetPasswordModal, setShowSetPasswordModal] = useState(false);
+  const [showVerifyOldPasswordModal, setShowVerifyOldPasswordModal] = useState(false);
   const [budgetAmount, setBudgetAmount] = useState('');
   const [warningThreshold, setWarningThreshold] = useState('');
   const [largeAmountThreshold, setLargeAmountThreshold] = useState('');
   const [balanceAmount, setBalanceAmount] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [oldPassword, setOldPassword] = useState('');
   const [passwordError, setPasswordError] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
@@ -118,8 +120,27 @@ export default function SettingsScreen() {
     setShowSetPasswordModal(false);
     setNewPassword('');
     setConfirmPassword('');
+    setOldPassword('');
     setPasswordError(false);
     showAlert('成功', '操作密码已设置');
+  };
+
+  const handleVerifyOldPassword = (password: string) => {
+    if (password === settings?.operationPassword) {
+      setShowVerifyOldPasswordModal(false);
+      setPasswordError(false);
+      setShowSetPasswordModal(true);
+    } else {
+      setPasswordError(true);
+    }
+  };
+
+  const openSetPasswordModal = () => {
+    if (settings?.operationPassword) {
+      setShowVerifyOldPasswordModal(true);
+    } else {
+      setShowSetPasswordModal(true);
+    }
   };
 
   const verifyPasswordAndExecute = (action: () => void) => {
@@ -446,14 +467,9 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'lock-closed',
             '操作密码',
-            settings?.operationPassword ? '已设置' : '点击设置',
+            settings?.operationPassword ? '已设置（点击修改）' : '点击设置',
             undefined,
-            () => {
-              setNewPassword('');
-              setConfirmPassword('');
-              setPasswordError(false);
-              setShowSetPasswordModal(true);
-            }
+            openSetPasswordModal
           )}
           
           {renderSettingItem(
@@ -566,7 +582,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.2'
+            '1.0.3'
           )}
           
           {renderSettingItem(
@@ -742,6 +758,19 @@ export default function SettingsScreen() {
           setPendingAction(null);
         }}
         onConfirm={handlePasswordConfirm}
+        isError={passwordError}
+        errorMessage="密码错误，请重试"
+      />
+
+      <PasswordModal
+        visible={showVerifyOldPasswordModal}
+        title="验证原密码"
+        message="请输入原密码以设置新密码"
+        onClose={() => {
+          setShowVerifyOldPasswordModal(false);
+          setPasswordError(false);
+        }}
+        onConfirm={handleVerifyOldPassword}
         isError={passwordError}
         errorMessage="密码错误，请重试"
       />

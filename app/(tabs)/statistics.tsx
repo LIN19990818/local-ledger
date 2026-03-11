@@ -55,8 +55,9 @@ export default function StatisticsScreen() {
       end = range.end;
     }
     
+    const year = timeRange === 'custom' ? selectedYear : new Date().getFullYear();
+    
     if (timeRange === 'year' || timeRange === 'custom') {
-      const year = timeRange === 'year' ? new Date().getFullYear() : selectedYear;
       const [yearStats, trend, breakdown] = await Promise.all([
         TransactionRepository.getYearlyStats(year),
         TransactionRepository.getMonthlyTrend(year),
@@ -79,17 +80,19 @@ export default function StatisticsScreen() {
       
       setYearlyData({ topCategory });
     } else {
-      const [periodStats, breakdown] = await Promise.all([
+      const [periodStats, breakdown, trend] = await Promise.all([
         timeRange === 'day' 
           ? TransactionRepository.getDailyStats(Date.now())
           : timeRange === 'week'
           ? TransactionRepository.getWeeklyStats(Date.now())
           : TransactionRepository.getMonthlyStats(format(new Date(), 'yyyy-MM')),
-        TransactionRepository.getCategoryBreakdown(start, end, breakdownType)
+        TransactionRepository.getCategoryBreakdown(start, end, breakdownType),
+        TransactionRepository.getMonthlyTrend(new Date().getFullYear())
       ]);
       
       setStats(periodStats);
       setCategoryBreakdown(breakdown);
+      setMonthlyTrend(trend);
     }
   };
 

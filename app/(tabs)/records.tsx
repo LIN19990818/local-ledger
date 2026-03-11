@@ -102,41 +102,59 @@ export default function RecordsScreen() {
   const handleDeleteSelected = () => {
     if (selectedItems.size === 0) return;
     
-    showAlert(
-      '确认删除',
-      `确定要删除选中的 ${selectedItems.size} 条记录吗？删除后无法恢复。`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteTransactions(Array.from(selectedItems));
-            setSelectedItems(new Set());
-            setIsSelectMode(false);
-            loadTransactions();
+    const executeDelete = () => {
+      showAlert(
+        '确认删除',
+        `确定要删除选中的 ${selectedItems.size} 条记录吗？删除后无法恢复。`,
+        [
+          { text: '取消', style: 'cancel' },
+          {
+            text: '删除',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteTransactions(Array.from(selectedItems));
+              setSelectedItems(new Set());
+              setIsSelectMode(false);
+              loadTransactions();
+            }
           }
-        }
-      ]
-    );
+        ]
+      );
+    };
+    
+    if (settings?.operationPassword) {
+      setPendingAction(() => executeDelete);
+      setShowPasswordModal(true);
+    } else {
+      executeDelete();
+    }
   };
 
   const handleDeleteSingle = (transaction: Transaction) => {
-    showAlert(
-      '确认删除',
-      `确定要删除这条${formatCurrency(transaction.amount)}的${transaction.type === 'income' ? '收入' : '支出'}记录吗？删除后无法恢复。`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteTransactions([transaction.id]);
-            loadTransactions();
+    const executeDelete = () => {
+      showAlert(
+        '确认删除',
+        `确定要删除这条${formatCurrency(transaction.amount)}的${transaction.type === 'income' ? '收入' : '支出'}记录吗？删除后无法恢复。`,
+        [
+          { text: '取消', style: 'cancel' },
+          {
+            text: '删除',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteTransactions([transaction.id]);
+              loadTransactions();
+            }
           }
-        }
-      ]
-    );
+        ]
+      );
+    };
+    
+    if (settings?.operationPassword) {
+      setPendingAction(() => executeDelete);
+      setShowPasswordModal(true);
+    } else {
+      executeDelete();
+    }
   };
 
   const handleEditTransaction = (transaction: Transaction) => {

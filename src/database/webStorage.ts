@@ -151,6 +151,16 @@ const saveSettings = async (settings: Settings) => {
   await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
 };
 
+const updateSettings = async (updates: Partial<Settings>): Promise<Settings | null> => {
+  const settings = await getSettings();
+  if (!settings) return null;
+  
+  const now = Date.now();
+  const updated = { ...settings, ...updates, updatedAt: now };
+  await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+  return updated;
+};
+
 const getQuickAmounts = async (): Promise<QuickAmount[]> => {
   const str = await AsyncStorage.getItem(STORAGE_KEYS.QUICK_AMOUNTS);
   return str ? JSON.parse(str) : [];
