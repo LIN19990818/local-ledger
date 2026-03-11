@@ -286,6 +286,27 @@ export const TransactionRepository = {
     return { income, expense, net: income - expense };
   },
   
+  async getWeeklyStats(date: number): Promise<{ income: number; expense: number; net: number }> {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const startOfWeek = new Date(d.getFullYear(), d.getMonth(), diff, 0, 0, 0, 0).getTime();
+    const endOfWeek = new Date(d.getFullYear(), d.getMonth(), diff + 6, 23, 59, 59, 999).getTime();
+    const transactions = await getTransactions();
+    
+    let income = 0;
+    let expense = 0;
+    
+    for (const t of transactions) {
+      if (t.date >= startOfWeek && t.date <= endOfWeek) {
+        if (t.type === 'income') income += t.amount;
+        else expense += t.amount;
+      }
+    }
+    
+    return { income, expense, net: income - expense };
+  },
+  
   async getMonthlyStats(yearMonth: string): Promise<{ income: number; expense: number; net: number }> {
     const [year, month] = yearMonth.split('-').map(Number);
     const startDate = new Date(year, month - 1, 1).getTime();
@@ -549,7 +570,10 @@ export const QuickAmountRepository = {
 export const clearAllData = async (): Promise<void> => {
   await AsyncStorage.multiRemove([
     STORAGE_KEYS.TRANSACTIONS,
-    STORAGE_KEYS.BUDGETS
+    STORAGE_KEYS.CATEGORIES,
+    STORAGE_KEYS.BUDGETS,
+    STORAGE_KEYS.SETTINGS,
+    STORAGE_KEYS.QUICK_AMOUNTS
   ]);
   
   const accountStr = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT);

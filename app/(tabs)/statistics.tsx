@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions
+  Dimensions,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,39 +15,55 @@ import { useAppStore } from '../../src/store';
 import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '../../src/theme/colors';
 import { formatCurrency, formatDate, calculatePercentage, getDateRange } from '../../src/utils/helpers';
 import { TransactionRepository } from '../../src/database/repository';
-import { format, subMonths, subYears, startOfMonth, endOfMonth } from 'date-fns';
+import { format, subMonths, subYears, startOfMonth, endOfMonth, startOfDay, endOfDay, startOfYear, endOfYear } from 'date-fns';
 
 const screenWidth = Dimensions.get('window').width;
 
-type TimeRange = 'day' | 'week' | 'month' | 'year';
+type TimeRange = 'day' | 'week' | 'month' | 'year' | 'custom';
 type ChartType = 'line' | 'bar' | 'pie';
+type BreakdownType = 'expense' | 'income';
 
 export default function StatisticsScreen() {
   const { account, budget, transactions } = useAppStore();
   
   const [timeRange, setTimeRange] = useState<TimeRange>('day');
   const [chartType, setChartType] = useState<ChartType>('pie');
+  const [breakdownType, setBreakdownType] = useState<BreakdownType>('expense');
   const [stats, setStats] = useState({ income: 0, expense: 0, net: 0 });
   const [categoryBreakdown, setCategoryBreakdown] = useState<any[]>([]);
   const [monthlyTrend, setMonthlyTrend] = useState<any[]>([]);
   const [yearlyData, setYearlyData] = useState<any>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
 
   useEffect(() => {
     loadStatistics();
-  }, [timeRange, transactions]);
+  }, [timeRange, transactions, breakdownType, customStartDate, customEndDate]);
 
   const loadStatistics = async () => {
-    const { start, end } = getDateRange(timeRange);
+    let start: number, end: number;
     
-    if (timeRange === 'year') {
-      const year = new Date().getFullYear();
+    if (timeRange === 'custom') {
+      start = startOfDay(customStartDate).getTime();
+      end = endOfDay(customEndDate).getTime();
+    } else {
+      const range = getDateRange(timeRange);
+      start = range.start;
+      end = range.end;
+    }
+    
+    if (timeRange === 'year' || timeRange === 'custom') {
+      const year = timeRange === 'year' ? new Date().getFullYear() : selectedYear;
       const [yearStats, trend, breakdown] = await Promise.all([
         TransactionRepository.getYearlyStats(year),
         TransactionRepository.getMonthlyTrend(year),
         TransactionRepository.getCategoryBreakdown(
-          new Date(year, 0, 1).getTime(),
-          new Date(year, 11, 31, 23, 59, 59, 999).getTime(),
-          'expense'
+          timeRange === 'custom' ? start : new Date(year, 0, 1).getTime(),
+          timeRange === 'custom' ? end : new Date(year, 11, 31, 23, 59, 59, 999).getTime(),
+          breakdownType
         )
       ]);
       
@@ -57,7 +74,7 @@ export default function StatisticsScreen() {
       const topCategory = breakdown.length > 0 ? {
         name: breakdown[0].categoryName,
         amount: breakdown[0].amount,
-        percentage: calculatePercentage(breakdown[0].amount, yearStats.expense)
+        percentage: calculatePercentage(breakdown[0].amount, breakdownType === 'expense' ? yearStats.expense : yearStats.income)
       } : null;
       
       setYearlyData({ topCategory });
@@ -66,9 +83,9 @@ export default function StatisticsScreen() {
         timeRange === 'day' 
           ? TransactionRepository.getDailyStats(Date.now())
           : timeRange === 'week'
-          ? TransactionRepository.getMonthlyStats(format(new Date(), 'yyyy-MM'))
+          ? TransactionRepository.getWeeklyStats(Date.now())
           : TransactionRepository.getMonthlyStats(format(new Date(), 'yyyy-MM')),
-        TransactionRepository.getCategoryBreakdown(start, end, 'expense')
+        TransactionRepository.getCategoryBreakdown(start, end, breakdownType)
       ]);
       
       setStats(periodStats);
@@ -107,15 +124,21 @@ export default function StatisticsScreen() {
   }));
 
   const lineData = {
-    labels: monthlyTrend.slice(-6).map(m => format(new Date(m.month), 'M月')),
+    labels: monthlyTrend.length > 0 
+      ? monthlyTrend.slice(-6).map(m => format(new Date(m.month), 'M月'))
+      : ['1月', '2月', '3月', '4月', '5月', '6月'],
     datasets: [
       {
-        data: monthlyTrend.slice(-6).map(m => m.income),
+        data: monthlyTrend.length > 0 
+          ? monthlyTrend.slice(-6).map(m => m.income || 0)
+          : [0, 0, 0, 0, 0, 0],
         color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
         strokeWidth: 2
       },
       {
-        data: monthlyTrend.slice(-6).map(m => m.expense),
+        data: monthlyTrend.length > 0 
+          ? monthlyTrend.slice(-6).map(m => m.expense || 0)
+          : [0, 0, 0, 0, 0, 0],
         color: (opacity = 1) => `rgba(239, 68, 68, ${opacity})`,
         strokeWidth: 2
       }
@@ -123,14 +146,20 @@ export default function StatisticsScreen() {
   };
 
   const barData = {
-    labels: monthlyTrend.slice(-6).map(m => format(new Date(m.month), 'M月')),
+    labels: monthlyTrend.length > 0 
+      ? monthlyTrend.slice(-6).map(m => format(new Date(m.month), 'M月'))
+      : ['1月', '2月', '3月', '4月', '5月', '6月'],
     datasets: [
       {
-        data: monthlyTrend.slice(-6).map(m => m.income),
+        data: monthlyTrend.length > 0 
+          ? monthlyTrend.slice(-6).map(m => m.income || 0)
+          : [0, 0, 0, 0, 0, 0],
         color: (opacity = 1) => colors.success
       },
       {
-        data: monthlyTrend.slice(-6).map(m => m.expense),
+        data: monthlyTrend.length > 0 
+          ? monthlyTrend.slice(-6).map(m => m.expense || 0)
+          : [0, 0, 0, 0, 0, 0],
         color: (opacity = 1) => colors.danger
       }
     ]
@@ -138,20 +167,26 @@ export default function StatisticsScreen() {
 
   const renderTimeRangeSelector = () => (
     <View style={styles.timeRangeSelector}>
-      {(['day', 'week', 'month', 'year'] as TimeRange[]).map(range => (
+      {(['day', 'week', 'month', 'year', 'custom'] as TimeRange[]).map(range => (
         <TouchableOpacity
           key={range}
           style={[
             styles.timeRangeButton,
             timeRange === range && styles.timeRangeButtonActive
           ]}
-          onPress={() => setTimeRange(range)}
+          onPress={() => {
+            if (range === 'custom') {
+              setShowDatePicker(true);
+            } else {
+              setTimeRange(range);
+            }
+          }}
         >
           <Text style={[
             styles.timeRangeText,
             timeRange === range && styles.timeRangeTextActive
           ]}>
-            {range === 'day' ? '今日' : range === 'week' ? '本周' : range === 'month' ? '本月' : '本年'}
+            {range === 'day' ? '今日' : range === 'week' ? '本周' : range === 'month' ? '本月' : range === 'year' ? '本年' : '选择日期'}
           </Text>
         </TouchableOpacity>
       ))}
@@ -211,17 +246,49 @@ export default function StatisticsScreen() {
     </View>
   );
 
-  const renderChart = () => {
-    if (categoryBreakdown.length === 0) {
-      return (
-        <View style={styles.emptyChart}>
-          <Ionicons name="bar-chart-outline" size={48} color={colors.text.secondary.light} />
-          <Text style={styles.emptyText}>暂无数据</Text>
-        </View>
-      );
-    }
+  const renderBreakdownTypeSelector = () => (
+    <View style={styles.breakdownTypeSelector}>
+      <TouchableOpacity
+        style={[
+          styles.breakdownTypeButton,
+          breakdownType === 'expense' && styles.breakdownTypeButtonActive
+        ]}
+        onPress={() => setBreakdownType('expense')}
+      >
+        <Text style={[
+          styles.breakdownTypeText,
+          breakdownType === 'expense' && styles.breakdownTypeTextActive
+        ]}>
+          支出分析
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[
+          styles.breakdownTypeButton,
+          breakdownType === 'income' && styles.breakdownTypeButtonActive
+        ]}
+        onPress={() => setBreakdownType('income')}
+      >
+        <Text style={[
+          styles.breakdownTypeText,
+          breakdownType === 'income' && styles.breakdownTypeTextActive
+        ]}>
+          收入分析
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
+  const renderChart = () => {
     if (chartType === 'pie') {
+      if (categoryBreakdown.length === 0) {
+        return (
+          <View style={styles.emptyChart}>
+            <Ionicons name="pie-chart-outline" size={48} color={colors.text.secondary.light} />
+            <Text style={styles.emptyText}>暂无数据</Text>
+          </View>
+        );
+      }
       return (
         <PieChart
           data={pieData}
@@ -237,6 +304,14 @@ export default function StatisticsScreen() {
     }
 
     if (chartType === 'line') {
+      if (monthlyTrend.length === 0) {
+        return (
+          <View style={styles.emptyChart}>
+            <Ionicons name="analytics-outline" size={48} color={colors.text.secondary.light} />
+            <Text style={styles.emptyText}>暂无数据</Text>
+          </View>
+        );
+      }
       return (
         <LineChart
           data={lineData}
@@ -246,6 +321,15 @@ export default function StatisticsScreen() {
           bezier
           style={styles.chart}
         />
+      );
+    }
+
+    if (monthlyTrend.length === 0) {
+      return (
+        <View style={styles.emptyChart}>
+          <Ionicons name="bar-chart-outline" size={48} color={colors.text.secondary.light} />
+          <Text style={styles.emptyText}>暂无数据</Text>
+        </View>
       );
     }
 
@@ -268,7 +352,10 @@ export default function StatisticsScreen() {
 
   const renderCategoryBreakdown = () => (
     <View style={styles.categorySection}>
-      <Text style={styles.sectionTitle}>分类明细</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>分类明细</Text>
+        {renderBreakdownTypeSelector()}
+      </View>
       {categoryBreakdown.slice(0, 8).map((item, index) => (
         <TouchableOpacity key={item.categoryId} style={styles.categoryItem}>
           <View style={styles.categoryLeft}>
@@ -285,7 +372,7 @@ export default function StatisticsScreen() {
                 style={[
                   styles.categoryBarFill, 
                   { 
-                    width: `${calculatePercentage(item.amount, stats.expense)}%`,
+                    width: `${calculatePercentage(item.amount, breakdownType === 'expense' ? stats.expense : stats.income)}%`,
                     backgroundColor: pieColors[index % pieColors.length]
                   }
                 ]} 
@@ -339,6 +426,75 @@ export default function StatisticsScreen() {
         {renderCategoryBreakdown()}
         {renderYearlySummary()}
       </ScrollView>
+
+      <Modal
+        visible={showDatePicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerContent}>
+            <Text style={styles.datePickerTitle}>选择日期范围</Text>
+            
+            <Text style={styles.datePickerLabel}>选择年份</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearScroll}>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                <TouchableOpacity
+                  key={year}
+                  style={[styles.yearChip, selectedYear === year && styles.yearChipActive]}
+                  onPress={() => setSelectedYear(year)}
+                >
+                  <Text style={[styles.yearChipText, selectedYear === year && styles.yearChipTextActive]}>
+                    {year}年
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <Text style={styles.datePickerLabel}>选择月份</Text>
+            <View style={styles.monthGrid}>
+              {Array.from({ length: 12 }, (_, i) => i).map(month => (
+                <TouchableOpacity
+                  key={month}
+                  style={[styles.monthChip, selectedMonth === month && styles.monthChipActive]}
+                  onPress={() => setSelectedMonth(month)}
+                >
+                  <Text style={[styles.monthChipText, selectedMonth === month && styles.monthChipTextActive]}>
+                    {month + 1}月
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <Text style={styles.datePickerHint}>
+              已选择: {selectedYear}年{selectedMonth + 1}月
+            </Text>
+            
+            <View style={styles.datePickerButtons}>
+              <TouchableOpacity
+                style={[styles.datePickerButton, styles.datePickerButtonCancel]}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.datePickerButtonCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.datePickerButton, styles.datePickerButtonConfirm]}
+                onPress={() => {
+                  const startDate = new Date(selectedYear, selectedMonth, 1);
+                  const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+                  setCustomStartDate(startDate);
+                  setCustomEndDate(endDate);
+                  setTimeRange('custom');
+                  setShowDatePicker(false);
+                }}
+              >
+                <Text style={styles.datePickerButtonConfirmText}>确定</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -534,5 +690,141 @@ const styles = StyleSheet.create({
     color: colors.text.secondary.light,
     marginTop: spacing.xs,
     textAlign: 'center'
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md
+  },
+  breakdownTypeSelector: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.md,
+    padding: 2
+  },
+  breakdownTypeButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm
+  },
+  breakdownTypeButtonActive: {
+    backgroundColor: colors.primary
+  },
+  breakdownTypeText: {
+    fontSize: fontSize.xs,
+    color: colors.text.secondary.light
+  },
+  breakdownTypeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.medium
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  datePickerContent: {
+    backgroundColor: colors.card.light,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    width: '90%',
+    maxWidth: 400
+  },
+  datePickerTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary.light,
+    textAlign: 'center',
+    marginBottom: spacing.lg
+  },
+  datePickerLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.text.secondary.light,
+    marginBottom: spacing.sm
+  },
+  yearScroll: {
+    marginBottom: spacing.md
+  },
+  yearChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface.light,
+    marginRight: spacing.xs
+  },
+  yearChipActive: {
+    backgroundColor: colors.primary
+  },
+  yearChipText: {
+    fontSize: fontSize.md,
+    color: colors.text.primary.light
+  },
+  yearChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.semibold
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    justifyContent: 'center'
+  },
+  monthChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface.light,
+    minWidth: 60,
+    alignItems: 'center'
+  },
+  monthChipActive: {
+    backgroundColor: colors.primary
+  },
+  monthChipText: {
+    fontSize: fontSize.md,
+    color: colors.text.primary.light
+  },
+  monthChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.semibold
+  },
+  datePickerHint: {
+    fontSize: fontSize.md,
+    color: colors.text.secondary.light,
+    textAlign: 'center',
+    marginVertical: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.lg
+  },
+  datePickerButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md
+  },
+  datePickerButton: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center'
+  },
+  datePickerButtonCancel: {
+    backgroundColor: colors.surface.light
+  },
+  datePickerButtonConfirm: {
+    backgroundColor: colors.primary
+  },
+  datePickerButtonCancelText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: colors.text.primary.light
+  },
+  datePickerButtonConfirmText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: '#FFFFFF'
   }
 });

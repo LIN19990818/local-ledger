@@ -69,12 +69,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       set({ isLoading: true });
       
-      const [account, categories, settings, budget, quickAmounts] = await Promise.all([
+      const [account, categories, settings, budget, quickAmounts, transactions] = await Promise.all([
         AccountRepository.get(),
         CategoryRepository.getAll(),
         SettingsRepository.get(),
         BudgetRepository.getByMonth(format(new Date(), 'yyyy-MM')),
-        QuickAmountRepository.getAll()
+        QuickAmountRepository.getAll(),
+        TransactionRepository.getAll()
       ]);
       
       set({
@@ -84,7 +85,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         categories,
         settings,
         budget,
-        quickAmounts
+        quickAmounts,
+        transactions
       });
     } catch (error) {
       console.error('Failed to initialize:', error);

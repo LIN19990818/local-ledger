@@ -296,6 +296,35 @@ export const TransactionRepository = {
     return { income, expense, net: income - expense };
   },
   
+  async getWeeklyStats(date: number): Promise<{ income: number; expense: number; net: number }> {
+    if (isWeb) {
+      const webRepo = await import('./webStorage');
+      return webRepo.TransactionRepository.getWeeklyStats(date);
+    }
+    
+    const db = await getNativeDB();
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const startOfWeek = new Date(d.setDate(diff)).setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(d.setDate(diff + 6)).setHours(23, 59, 59, 999);
+    
+    const rows = await db.getAllAsync<any>(
+      'SELECT type, SUM(amount) as total FROM transactions WHERE date >= ? AND date <= ? GROUP BY type',
+      [startOfWeek, endOfWeek]
+    );
+    
+    let income = 0;
+    let expense = 0;
+    
+    for (const row of rows) {
+      if (row.type === 'income') income = row.total || 0;
+      else expense = row.total || 0;
+    }
+    
+    return { income, expense, net: income - expense };
+  },
+  
   async getMonthlyStats(yearMonth: string): Promise<{ income: number; expense: number; net: number }> {
     if (isWeb) {
       const webRepo = await import('./webStorage');

@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Pressable
+  Pressable,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,10 +17,10 @@ import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '..
 import { formatCurrency, formatDate, getDateRange, showAlert } from '../../src/utils/helpers';
 import { Transaction } from '../../src/types';
 import { TransactionRepository } from '../../src/database/repository';
-import { format } from 'date-fns';
+import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import { PasswordModal } from '../../src/components/PasswordModal';
 
-type TimeFilter = 'day' | 'week' | 'month' | 'year' | 'all';
+type TimeFilter = 'day' | 'week' | 'month' | 'year' | 'all' | 'custom';
 type TypeFilter = 'all' | 'income' | 'expense';
 
 export default function RecordsScreen() {
@@ -41,17 +42,27 @@ export default function RecordsScreen() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  const [selectingStartDate, setSelectingStartDate] = useState(true);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [showYearMonthPicker, setShowYearMonthPicker] = useState(false);
 
   useEffect(() => {
     loadTransactions();
-  }, [timeFilter, typeFilter, selectedCategory, storeTransactions]);
+  }, [timeFilter, typeFilter, selectedCategory, storeTransactions, customStartDate, customEndDate]);
 
   const loadTransactions = async () => {
     setRefreshing(true);
     
     let options: any = {};
     
-    if (timeFilter !== 'all') {
+    if (timeFilter === 'custom') {
+      options.startDate = startOfDay(customStartDate).getTime();
+      options.endDate = endOfDay(customEndDate).getTime();
+    } else if (timeFilter !== 'all') {
       const { start, end } = getDateRange(timeFilter);
       options.startDate = start;
       options.endDate = end;
@@ -334,7 +345,7 @@ export default function RecordsScreen() {
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
-            data={['day', 'week', 'month', 'year', 'all'] as TimeFilter[]}
+            data={['day', 'week', 'month', 'year', 'all', 'custom'] as TimeFilter[]}
             keyExtractor={(item) => item}
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -342,13 +353,19 @@ export default function RecordsScreen() {
                   styles.filterChip,
                   timeFilter === item && styles.filterChipActive
                 ]}
-                onPress={() => setTimeFilter(item)}
+                onPress={() => {
+                  if (item === 'custom') {
+                    setShowYearMonthPicker(true);
+                  } else {
+                    setTimeFilter(item);
+                  }
+                }}
               >
                 <Text style={[
                   styles.filterChipText,
                   timeFilter === item && styles.filterChipTextActive
                 ]}>
-                  {item === 'day' ? '今日' : item === 'week' ? '本周' : item === 'month' ? '本月' : item === 'year' ? '本年' : '全部'}
+                  {item === 'day' ? '今日' : item === 'week' ? '本周' : item === 'month' ? '本月' : item === 'year' ? '本年' : item === 'custom' ? '选择日期' : '全部'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -580,6 +597,75 @@ export default function RecordsScreen() {
         isError={passwordError}
         errorMessage="密码错误，请重试"
       />
+
+      <Modal
+        visible={showYearMonthPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowYearMonthPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerContent}>
+            <Text style={styles.datePickerTitle}>选择日期范围</Text>
+            
+            <Text style={styles.datePickerLabel}>选择年份</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearScroll}>
+              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                <TouchableOpacity
+                  key={year}
+                  style={[styles.yearChip, selectedYear === year && styles.yearChipActive]}
+                  onPress={() => setSelectedYear(year)}
+                >
+                  <Text style={[styles.yearChipText, selectedYear === year && styles.yearChipTextActive]}>
+                    {year}年
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <Text style={styles.datePickerLabel}>选择月份</Text>
+            <View style={styles.monthGrid}>
+              {Array.from({ length: 12 }, (_, i) => i).map(month => (
+                <TouchableOpacity
+                  key={month}
+                  style={[styles.monthChip, selectedMonth === month && styles.monthChipActive]}
+                  onPress={() => setSelectedMonth(month)}
+                >
+                  <Text style={[styles.monthChipText, selectedMonth === month && styles.monthChipTextActive]}>
+                    {month + 1}月
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <Text style={styles.datePickerHint}>
+              已选择: {selectedYear}年{selectedMonth + 1}月
+            </Text>
+            
+            <View style={styles.datePickerButtons}>
+              <TouchableOpacity
+                style={[styles.datePickerButton, styles.datePickerButtonCancel]}
+                onPress={() => setShowYearMonthPicker(false)}
+              >
+                <Text style={styles.datePickerButtonCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.datePickerButton, styles.datePickerButtonConfirm]}
+                onPress={() => {
+                  const startDate = new Date(selectedYear, selectedMonth, 1);
+                  const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+                  setCustomStartDate(startDate);
+                  setCustomEndDate(endDate);
+                  setTimeFilter('custom');
+                  setShowYearMonthPicker(false);
+                }}
+              >
+                <Text style={styles.datePickerButtonConfirmText}>确定</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -906,6 +992,108 @@ const styles = StyleSheet.create({
     color: colors.text.primary.light
   },
   editButtonConfirmText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: '#FFFFFF'
+  },
+  datePickerContent: {
+    backgroundColor: colors.card.light,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    width: '90%',
+    maxWidth: 400
+  },
+  datePickerTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.semibold,
+    color: colors.text.primary.light,
+    textAlign: 'center',
+    marginBottom: spacing.lg
+  },
+  datePickerLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.text.secondary.light,
+    marginBottom: spacing.sm
+  },
+  yearScroll: {
+    marginBottom: spacing.md
+  },
+  yearChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface.light,
+    marginRight: spacing.xs
+  },
+  yearChipActive: {
+    backgroundColor: colors.primary
+  },
+  yearChipText: {
+    fontSize: fontSize.md,
+    color: colors.text.primary.light
+  },
+  yearChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.semibold
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    justifyContent: 'center'
+  },
+  monthChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.surface.light,
+    minWidth: 60,
+    alignItems: 'center'
+  },
+  monthChipActive: {
+    backgroundColor: colors.primary
+  },
+  monthChipText: {
+    fontSize: fontSize.md,
+    color: colors.text.primary.light
+  },
+  monthChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.semibold
+  },
+  datePickerHint: {
+    fontSize: fontSize.md,
+    color: colors.text.secondary.light,
+    textAlign: 'center',
+    marginVertical: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.lg
+  },
+  datePickerButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md
+  },
+  datePickerButton: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center'
+  },
+  datePickerButtonCancel: {
+    backgroundColor: colors.surface.light
+  },
+  datePickerButtonConfirm: {
+    backgroundColor: colors.primary
+  },
+  datePickerButtonCancelText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: colors.text.primary.light
+  },
+  datePickerButtonConfirmText: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.medium,
     color: '#FFFFFF'
