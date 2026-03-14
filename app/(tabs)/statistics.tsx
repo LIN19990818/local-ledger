@@ -36,8 +36,10 @@ export default function StatisticsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedDay, setSelectedDay] = useState(new Date().getDate());
   const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
   const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
+  const [datePickerMode, setDatePickerMode] = useState<'month' | 'day'>('month');
 
   useEffect(() => {
     loadStatistics();
@@ -438,40 +440,83 @@ export default function StatisticsScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.datePickerContent}>
-            <Text style={styles.datePickerTitle}>选择日期范围</Text>
+            <Text style={styles.datePickerTitle}>选择日期</Text>
             
-            <Text style={styles.datePickerLabel}>选择年份</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearScroll}>
-              {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
-                <TouchableOpacity
-                  key={year}
-                  style={[styles.yearChip, selectedYear === year && styles.yearChipActive]}
-                  onPress={() => setSelectedYear(year)}
-                >
-                  <Text style={[styles.yearChipText, selectedYear === year && styles.yearChipTextActive]}>
-                    {year}年
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            
-            <Text style={styles.datePickerLabel}>选择月份</Text>
-            <View style={styles.monthGrid}>
-              {Array.from({ length: 12 }, (_, i) => i).map(month => (
-                <TouchableOpacity
-                  key={month}
-                  style={[styles.monthChip, selectedMonth === month && styles.monthChipActive]}
-                  onPress={() => setSelectedMonth(month)}
-                >
-                  <Text style={[styles.monthChipText, selectedMonth === month && styles.monthChipTextActive]}>
-                    {month + 1}月
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.datePickerModeSelector}>
+              <TouchableOpacity
+                style={[styles.datePickerModeButton, datePickerMode === 'month' && styles.datePickerModeButtonActive]}
+                onPress={() => setDatePickerMode('month')}
+              >
+                <Text style={[styles.datePickerModeText, datePickerMode === 'month' && styles.datePickerModeTextActive]}>
+                  按月选择
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.datePickerModeButton, datePickerMode === 'day' && styles.datePickerModeButtonActive]}
+                onPress={() => setDatePickerMode('day')}
+              >
+                <Text style={[styles.datePickerModeText, datePickerMode === 'day' && styles.datePickerModeTextActive]}>
+                  按日选择
+                </Text>
+              </TouchableOpacity>
             </View>
             
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.datePickerLabel}>选择年份</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearScroll}>
+                {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                  <TouchableOpacity
+                    key={year}
+                    style={[styles.yearChip, selectedYear === year && styles.yearChipActive]}
+                    onPress={() => setSelectedYear(year)}
+                  >
+                    <Text style={[styles.yearChipText, selectedYear === year && styles.yearChipTextActive]}>
+                      {year}年
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              <Text style={styles.datePickerLabel}>选择月份</Text>
+              <View style={styles.monthGrid}>
+                {Array.from({ length: 12 }, (_, i) => i).map(month => (
+                  <TouchableOpacity
+                    key={month}
+                    style={[styles.monthChip, selectedMonth === month && styles.monthChipActive]}
+                    onPress={() => setSelectedMonth(month)}
+                  >
+                    <Text style={[styles.monthChipText, selectedMonth === month && styles.monthChipTextActive]}>
+                      {month + 1}月
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              {datePickerMode === 'day' && (
+                <>
+                  <Text style={styles.datePickerLabel}>选择日期</Text>
+                  <View style={styles.dayGrid}>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                      <TouchableOpacity
+                        key={day}
+                        style={[styles.dayChip, selectedDay === day && styles.dayChipActive]}
+                        onPress={() => setSelectedDay(day)}
+                      >
+                        <Text style={[styles.dayChipText, selectedDay === day && styles.dayChipTextActive]}>
+                          {day}日
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+            
             <Text style={styles.datePickerHint}>
-              已选择: {selectedYear}年{selectedMonth + 1}月
+              {datePickerMode === 'month' 
+                ? `已选择: ${selectedYear}年${selectedMonth + 1}月`
+                : `已选择: ${selectedYear}年${selectedMonth + 1}月${selectedDay}日`
+              }
             </Text>
             
             <View style={styles.datePickerButtons}>
@@ -484,8 +529,14 @@ export default function StatisticsScreen() {
               <TouchableOpacity
                 style={[styles.datePickerButton, styles.datePickerButtonConfirm]}
                 onPress={() => {
-                  const startDate = new Date(selectedYear, selectedMonth, 1);
-                  const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+                  let startDate: Date, endDate: Date;
+                  if (datePickerMode === 'month') {
+                    startDate = new Date(selectedYear, selectedMonth, 1);
+                    endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+                  } else {
+                    startDate = new Date(selectedYear, selectedMonth, selectedDay, 0, 0, 0, 0);
+                    endDate = new Date(selectedYear, selectedMonth, selectedDay, 23, 59, 59, 999);
+                  }
                   setCustomStartDate(startDate);
                   setCustomEndDate(endDate);
                   setTimeRange('custom');
@@ -733,7 +784,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     width: '90%',
-    maxWidth: 400
+    maxWidth: 400,
+    maxHeight: '80%'
   },
   datePickerTitle: {
     fontSize: fontSize.xl,
@@ -791,6 +843,56 @@ const styles = StyleSheet.create({
     color: colors.text.primary.light
   },
   monthChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.semibold
+  },
+  datePickerModeSelector: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.md,
+    padding: 2,
+    marginBottom: spacing.md
+  },
+  datePickerModeButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center'
+  },
+  datePickerModeButtonActive: {
+    backgroundColor: colors.primary
+  },
+  datePickerModeText: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary.light
+  },
+  datePickerModeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.medium
+  },
+  dayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    marginBottom: spacing.md
+  },
+  dayChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface.light,
+    minWidth: 45,
+    alignItems: 'center'
+  },
+  dayChipActive: {
+    backgroundColor: colors.primary
+  },
+  dayChipText: {
+    fontSize: fontSize.xs,
+    color: colors.text.primary.light
+  },
+  dayChipTextActive: {
     color: '#FFFFFF',
     fontWeight: fontWeight.semibold
   },

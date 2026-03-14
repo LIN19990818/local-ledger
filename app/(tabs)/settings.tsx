@@ -173,26 +173,6 @@ export default function SettingsScreen() {
     });
   };
 
-  const downloadFile = (content: string, fileName: string, mimeType: string) => {
-    try {
-      const blob = new Blob([content], { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 100);
-    } catch (error) {
-      console.error('Download error:', error);
-      showAlert('导出失败', '文件下载失败，请重试');
-    }
-  };
-
   const handleExportData = async () => {
     try {
       const transactions = await TransactionRepository.getAll();
@@ -206,7 +186,7 @@ export default function SettingsScreen() {
       }
       
       const exportData = {
-        version: '1.0.3',
+        version: '1.0.4',
         exportedAt: Date.now(),
         transactions,
         categories: categoriesData,
@@ -218,8 +198,24 @@ export default function SettingsScreen() {
       const content = JSON.stringify(exportData, null, 2);
       
       if (Platform.OS === 'web') {
-        downloadFile(content, fileName, 'application/json');
-        showAlert('导出成功', `已导出 ${transactions.length} 条记录`);
+        try {
+          const blob = new Blob([content], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 100);
+          showAlert('导出成功', `已导出 ${transactions.length} 条记录`);
+        } catch (webError) {
+          console.error('Web export error:', webError);
+          showAlert('导出失败', '文件下载失败，请重试');
+        }
       } else {
         const filePath = `${FileSystem.cacheDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(filePath, content);
@@ -258,8 +254,24 @@ export default function SettingsScreen() {
       const fileName = `ledger_${format(new Date(), 'yyyy-MM-dd')}.csv`;
       
       if (Platform.OS === 'web') {
-        downloadFile(csvContent, fileName, 'text/csv;charset=utf-8');
-        showAlert('导出成功', 'CSV文件已下载');
+        try {
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 100);
+          showAlert('导出成功', 'CSV文件已下载');
+        } catch (webError) {
+          console.error('CSV export error:', webError);
+          showAlert('导出失败', 'CSV文件下载失败，请重试');
+        }
       } else {
         const filePath = `${FileSystem.cacheDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(filePath, csvContent);
@@ -593,7 +605,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.4'
+            '1.0.5'
           )}
           
           {renderSettingItem(
