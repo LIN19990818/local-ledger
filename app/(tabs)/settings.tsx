@@ -175,10 +175,20 @@ export default function SettingsScreen() {
 
   const handleExportData = async () => {
     try {
+      console.log('开始导出数据...');
+      console.log('Platform.OS:', Platform.OS);
+      
       const transactions = await TransactionRepository.getAll();
+      console.log('获取到交易记录:', transactions.length);
+      
       const categoriesData = await CategoryRepository.getAll();
+      console.log('获取到分类:', categoriesData.length);
+      
       const accountData = await AccountRepository.get();
+      console.log('获取到账户:', accountData ? 'yes' : 'no');
+      
       const settingsData = await SettingsRepository.get();
+      console.log('获取到设置:', settingsData ? 'yes' : 'no');
       
       if (transactions.length === 0) {
         showAlert('提示', '暂无数据可导出');
@@ -186,7 +196,7 @@ export default function SettingsScreen() {
       }
       
       const exportData = {
-        version: '1.0.4',
+        version: '1.0.5',
         exportedAt: Date.now(),
         transactions,
         categories: categoriesData,
@@ -195,9 +205,13 @@ export default function SettingsScreen() {
       };
       
       const fileName = `ledger_backup_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.json`;
+      console.log('文件名:', fileName);
+      
       const content = JSON.stringify(exportData, null, 2);
+      console.log('JSON内容长度:', content.length);
       
       if (Platform.OS === 'web') {
+        console.log('使用Web方式导出...');
         try {
           const blob = new Blob([content], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -214,20 +228,42 @@ export default function SettingsScreen() {
           showAlert('导出成功', `已导出 ${transactions.length} 条记录`);
         } catch (webError) {
           console.error('Web export error:', webError);
-          showAlert('导出失败', '文件下载失败，请重试');
+          showAlert('导出失败', `文件下载失败: ${webError instanceof Error ? webError.message : '未知错误'}`);
         }
       } else {
-        const filePath = `${FileSystem.cacheDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(filePath, content);
+        console.log('使用原生方式导出...');
+        const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        if (!cacheDir) {
+          showAlert('导出失败', '无法获取存储目录');
+          return;
+        }
+        
+        const filePath = `${cacheDir}${fileName}`;
+        console.log('文件路径:', filePath);
+        
+        await FileSystem.writeAsStringAsync(filePath, content, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+        
+        const fileInfo = await FileSystem.getInfoAsync(filePath);
+        console.log('文件信息:', fileInfo);
+        
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(filePath);
+          await Sharing.shareAsync(filePath, {
+            mimeType: 'application/json',
+            dialogTitle: '导出数据备份',
+            UTI: 'public.json'
+          });
         } else {
           showAlert('导出成功', `文件已保存到: ${filePath}`);
         }
       }
     } catch (error) {
       console.error('Export error:', error);
-      showAlert('导出失败', '数据导出过程中出现错误');
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const errorStack = error instanceof Error ? error.stack : '';
+      console.error('Error stack:', errorStack);
+      showAlert('导出失败', `数据导出过程中出现错误: ${errorMessage}`);
     }
   };
 
@@ -273,10 +309,23 @@ export default function SettingsScreen() {
           showAlert('导出失败', 'CSV文件下载失败，请重试');
         }
       } else {
-        const filePath = `${FileSystem.cacheDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(filePath, csvContent);
+        const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        if (!cacheDir) {
+          showAlert('导出失败', '无法获取存储目录');
+          return;
+        }
+        
+        const filePath = `${cacheDir}${fileName}`;
+        await FileSystem.writeAsStringAsync(filePath, csvContent, {
+          encoding: FileSystem.EncodingType.UTF8
+        });
+        
         if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(filePath);
+          await Sharing.shareAsync(filePath, {
+            mimeType: 'text/csv',
+            dialogTitle: '导出CSV文件',
+            UTI: 'public.comma-separated-values-text'
+          });
         } else {
           showAlert('导出成功', `文件已保存到: ${filePath}`);
         }
@@ -605,7 +654,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.5'
+            '1.0.6'
           )}
           
           {renderSettingItem(
