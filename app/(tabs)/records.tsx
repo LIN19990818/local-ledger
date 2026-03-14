@@ -48,7 +48,9 @@ export default function RecordsScreen() {
   const [selectingStartDate, setSelectingStartDate] = useState(true);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedDay, setSelectedDay] = useState(new Date().getDate());
   const [showYearMonthPicker, setShowYearMonthPicker] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState<'month' | 'day'>('month');
 
   useEffect(() => {
     loadTransactions();
@@ -624,7 +626,26 @@ export default function RecordsScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.datePickerContent}>
-            <Text style={styles.datePickerTitle}>选择日期范围</Text>
+            <Text style={styles.datePickerTitle}>选择日期</Text>
+            
+            <View style={styles.datePickerModeSelector}>
+              <TouchableOpacity
+                style={[styles.datePickerModeButton, datePickerMode === 'month' && styles.datePickerModeButtonActive]}
+                onPress={() => setDatePickerMode('month')}
+              >
+                <Text style={[styles.datePickerModeText, datePickerMode === 'month' && styles.datePickerModeTextActive]}>
+                  按月选择
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.datePickerModeButton, datePickerMode === 'day' && styles.datePickerModeButtonActive]}
+                onPress={() => setDatePickerMode('day')}
+              >
+                <Text style={[styles.datePickerModeText, datePickerMode === 'day' && styles.datePickerModeTextActive]}>
+                  按日选择
+                </Text>
+              </TouchableOpacity>
+            </View>
             
             <Text style={styles.datePickerLabel}>选择年份</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearScroll}>
@@ -656,8 +677,30 @@ export default function RecordsScreen() {
               ))}
             </View>
             
+            {datePickerMode === 'day' && (
+              <>
+                <Text style={styles.datePickerLabel}>选择日期</Text>
+                <View style={styles.dayGrid}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[styles.dayChip, selectedDay === day && styles.dayChipActive]}
+                      onPress={() => setSelectedDay(day)}
+                    >
+                      <Text style={[styles.dayChipText, selectedDay === day && styles.dayChipTextActive]}>
+                        {day}日
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+            
             <Text style={styles.datePickerHint}>
-              已选择: {selectedYear}年{selectedMonth + 1}月
+              {datePickerMode === 'month' 
+                ? `已选择: ${selectedYear}年${selectedMonth + 1}月`
+                : `已选择: ${selectedYear}年${selectedMonth + 1}月${selectedDay}日`
+              }
             </Text>
             
             <View style={styles.datePickerButtons}>
@@ -670,8 +713,14 @@ export default function RecordsScreen() {
               <TouchableOpacity
                 style={[styles.datePickerButton, styles.datePickerButtonConfirm]}
                 onPress={() => {
-                  const startDate = new Date(selectedYear, selectedMonth, 1);
-                  const endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+                  let startDate: Date, endDate: Date;
+                  if (datePickerMode === 'month') {
+                    startDate = new Date(selectedYear, selectedMonth, 1);
+                    endDate = new Date(selectedYear, selectedMonth + 1, 0, 23, 59, 59, 999);
+                  } else {
+                    startDate = new Date(selectedYear, selectedMonth, selectedDay, 0, 0, 0, 0);
+                    endDate = new Date(selectedYear, selectedMonth, selectedDay, 23, 59, 59, 999);
+                  }
                   setCustomStartDate(startDate);
                   setCustomEndDate(endDate);
                   setTimeFilter('custom');
@@ -1028,6 +1077,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.lg
   },
+  datePickerModeSelector: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.md,
+    padding: 2,
+    marginBottom: spacing.md
+  },
+  datePickerModeButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    alignItems: 'center'
+  },
+  datePickerModeButtonActive: {
+    backgroundColor: colors.primary
+  },
+  datePickerModeText: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary.light
+  },
+  datePickerModeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.medium
+  },
   datePickerLabel: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
@@ -1077,6 +1150,32 @@ const styles = StyleSheet.create({
     color: colors.text.primary.light
   },
   monthChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: fontWeight.semibold
+  },
+  dayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    marginBottom: spacing.md
+  },
+  dayChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surface.light,
+    minWidth: 45,
+    alignItems: 'center'
+  },
+  dayChipActive: {
+    backgroundColor: colors.primary
+  },
+  dayChipText: {
+    fontSize: fontSize.xs,
+    color: colors.text.primary.light
+  },
+  dayChipTextActive: {
     color: '#FFFFFF',
     fontWeight: fontWeight.semibold
   },

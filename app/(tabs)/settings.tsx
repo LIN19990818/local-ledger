@@ -174,16 +174,22 @@ export default function SettingsScreen() {
   };
 
   const downloadFile = (content: string, fileName: string, mimeType: string) => {
-    if (Platform.OS === 'web') {
+    try {
       const blob = new Blob([content], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    } catch (error) {
+      console.error('Download error:', error);
+      showAlert('导出失败', '文件下载失败，请重试');
     }
   };
 
@@ -194,8 +200,13 @@ export default function SettingsScreen() {
       const accountData = await AccountRepository.get();
       const settingsData = await SettingsRepository.get();
       
+      if (transactions.length === 0) {
+        showAlert('提示', '暂无数据可导出');
+        return;
+      }
+      
       const exportData = {
-        version: '1.0.0',
+        version: '1.0.3',
         exportedAt: Date.now(),
         transactions,
         categories: categoriesData,
@@ -203,12 +214,12 @@ export default function SettingsScreen() {
         settings: settingsData
       };
       
-      const fileName = `ledger_backup_${format(new Date(), 'yyyy-MM-dd')}.json`;
+      const fileName = `ledger_backup_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.json`;
       const content = JSON.stringify(exportData, null, 2);
       
       if (Platform.OS === 'web') {
         downloadFile(content, fileName, 'application/json');
-        showAlert('导出成功', '数据已下载');
+        showAlert('导出成功', `已导出 ${transactions.length} 条记录`);
       } else {
         const filePath = `${FileSystem.cacheDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(filePath, content);
@@ -582,13 +593,21 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.3'
+            '1.0.4'
           )}
           
           {renderSettingItem(
             'heart',
             '本地记账本',
             '纯本地存储，无需网络，保护隐私'
+          )}
+          
+          {renderSettingItem(
+            'bug',
+            '错误日志',
+            '查看应用错误记录',
+            undefined,
+            () => router.push('/error-log')
           )}
         </View>
       </ScrollView>

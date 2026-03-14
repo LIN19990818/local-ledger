@@ -144,7 +144,22 @@ const saveBudgets = async (budgets: Budget[]) => {
 
 const getSettings = async (): Promise<Settings | null> => {
   const str = await AsyncStorage.getItem(STORAGE_KEYS.SETTINGS);
-  return str ? JSON.parse(str) : null;
+  if (str) {
+    return JSON.parse(str);
+  }
+  
+  const defaultSettings: Settings = {
+    id: 'settings',
+    largeAmountThreshold: 1000,
+    warningThreshold: 100,
+    streakDays: 0,
+    lastRecordDate: null,
+    operationPassword: '',
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  await AsyncStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(defaultSettings));
+  return defaultSettings;
 };
 
 const saveSettings = async (settings: Settings) => {
