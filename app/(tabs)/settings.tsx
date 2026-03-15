@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { Platform } from 'react-native';
 import { Transaction, Category, Account, Settings } from '../../src/types';
 import { PasswordModal } from '../../src/components/PasswordModal';
+import { getAvailableStorageDirectory } from '../../src/utils/storageHelper';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -233,19 +234,18 @@ export default function SettingsScreen() {
       } else {
         console.log('使用原生方式导出...');
         console.log('Platform:', Platform.OS);
-        console.log('cacheDirectory:', FileSystem.cacheDirectory);
-        console.log('documentDirectory:', FileSystem.documentDirectory);
         
         try {
-          const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+          const storageInfo = await getAvailableStorageDirectory();
+          console.log('存储目录信息:', storageInfo);
           
-          if (!baseDir) {
-            console.error('No storage directory available');
-            showAlert('导出失败', '无法获取应用存储目录');
+          if (!storageInfo.available || !storageInfo.directory) {
+            console.error('没有可用的存储目录');
+            showAlert('导出失败', '无法获取可用的存储目录\n请确保应用有存储权限');
             return;
           }
           
-          const filePath = `${baseDir}${fileName}`;
+          const filePath = `${storageInfo.directory}${fileName}`;
           console.log('文件路径:', filePath);
           
           await FileSystem.writeAsStringAsync(filePath, content, {
@@ -329,15 +329,16 @@ export default function SettingsScreen() {
         console.log('CSV导出 - 使用原生方式...');
         
         try {
-          const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+          const storageInfo = await getAvailableStorageDirectory();
+          console.log('CSV存储目录信息:', storageInfo);
           
-          if (!baseDir) {
-            console.error('CSV: No storage directory available');
-            showAlert('导出失败', '无法获取应用存储目录');
+          if (!storageInfo.available || !storageInfo.directory) {
+            console.error('CSV: 没有可用的存储目录');
+            showAlert('导出失败', '无法获取可用的存储目录\n请确保应用有存储权限');
             return;
           }
           
-          const filePath = `${baseDir}${fileName}`;
+          const filePath = `${storageInfo.directory}${fileName}`;
           console.log('CSV文件路径:', filePath);
           
           await FileSystem.writeAsStringAsync(filePath, csvContent, {
@@ -683,7 +684,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.9'
+            '1.0.10'
           )}
           
           {renderSettingItem(
