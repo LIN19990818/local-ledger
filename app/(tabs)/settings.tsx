@@ -232,56 +232,47 @@ export default function SettingsScreen() {
         }
       } else {
         console.log('使用原生方式导出...');
-        
-        let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
-        
+        console.log('Platform:', Platform.OS);
         console.log('cacheDirectory:', FileSystem.cacheDirectory);
         console.log('documentDirectory:', FileSystem.documentDirectory);
-        console.log('baseDir:', baseDir);
-        
-        if (!baseDir) {
-          try {
-            console.log('尝试使用 StorageAccessFramework...');
-            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-            if (permissions.granted) {
-              baseDir = permissions.directoryUri;
-              console.log('SAF 目录:', baseDir);
-            } else {
-              showAlert('导出失败', '需要存储权限才能导出数据');
-              return;
-            }
-          } catch (safError) {
-            console.error('SAF error:', safError);
-            showAlert('导出失败', '无法获取存储权限\n请到设置中授予应用存储权限');
-            return;
-          }
-        }
-        
-        const filePath = `${baseDir}${fileName}`;
-        console.log('文件路径:', filePath);
         
         try {
+          const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+          
+          if (!baseDir) {
+            console.error('No storage directory available');
+            showAlert('导出失败', '无法获取应用存储目录');
+            return;
+          }
+          
+          const filePath = `${baseDir}${fileName}`;
+          console.log('文件路径:', filePath);
+          
           await FileSystem.writeAsStringAsync(filePath, content, {
             encoding: FileSystem.EncodingType.UTF8
           });
           
+          console.log('文件写入成功');
+          
           const fileInfo = await FileSystem.getInfoAsync(filePath);
           console.log('文件信息:', fileInfo);
           
-          if (await Sharing.isAvailableAsync()) {
+          const shareAvailable = await Sharing.isAvailableAsync();
+          console.log('Sharing available:', shareAvailable);
+          
+          if (shareAvailable) {
             console.log('开始分享...');
             await Sharing.shareAsync(filePath, {
               mimeType: 'application/json',
-              dialogTitle: '导出数据备份',
-              UTI: 'public.json'
+              dialogTitle: '导出数据备份'
             });
             console.log('分享完成');
           } else {
             showAlert('导出成功', `文件已保存到:\n${filePath}`);
           }
-        } catch (writeError) {
-          console.error('写入文件错误:', writeError);
-          showAlert('导出失败', `写入文件失败:\n${writeError instanceof Error ? writeError.message : '未知错误'}`);
+        } catch (exportError) {
+          console.error('Export error details:', exportError);
+          showAlert('导出失败', `导出错误:\n${exportError instanceof Error ? exportError.message : '未知错误'}`);
         }
       }
     } catch (error) {
@@ -335,44 +326,37 @@ export default function SettingsScreen() {
           showAlert('导出失败', 'CSV文件下载失败，请重试');
         }
       } else {
-        let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
-        
-        if (!baseDir) {
-          try {
-            console.log('CSV导出 - 尝试使用 StorageAccessFramework...');
-            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-            if (permissions.granted) {
-              baseDir = permissions.directoryUri;
-            } else {
-              showAlert('导出失败', '需要存储权限才能导出数据');
-              return;
-            }
-          } catch (safError) {
-            console.error('CSV SAF error:', safError);
-            showAlert('导出失败', '无法获取存储权限\n请到设置中授予应用存储权限');
-            return;
-          }
-        }
-        
-        const filePath = `${baseDir}${fileName}`;
+        console.log('CSV导出 - 使用原生方式...');
         
         try {
+          const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+          
+          if (!baseDir) {
+            console.error('CSV: No storage directory available');
+            showAlert('导出失败', '无法获取应用存储目录');
+            return;
+          }
+          
+          const filePath = `${baseDir}${fileName}`;
+          console.log('CSV文件路径:', filePath);
+          
           await FileSystem.writeAsStringAsync(filePath, csvContent, {
             encoding: FileSystem.EncodingType.UTF8
           });
           
+          console.log('CSV文件写入成功');
+          
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(filePath, {
               mimeType: 'text/csv',
-              dialogTitle: '导出CSV文件',
-              UTI: 'public.comma-separated-values-text'
+              dialogTitle: '导出CSV文件'
             });
           } else {
             showAlert('导出成功', `文件已保存到:\n${filePath}`);
           }
-        } catch (writeError) {
-          console.error('CSV写入文件错误:', writeError);
-          showAlert('导出失败', `写入文件失败:\n${writeError instanceof Error ? writeError.message : '未知错误'}`);
+        } catch (exportError) {
+          console.error('CSV export error details:', exportError);
+          showAlert('导出失败', `导出错误:\n${exportError instanceof Error ? exportError.message : '未知错误'}`);
         }
       }
     } catch (error) {
@@ -699,7 +683,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.8'
+            '1.0.9'
           )}
           
           {renderSettingItem(

@@ -116,3 +116,14 @@
    - 当 cacheDirectory 和 documentDirectory 为空时，弹出系统目录选择器
    - 用户可以选择保存位置
    - 改进权限请求流程
+
+---
+
+## 版本号：v1.0.9（同步日期：2026-03-15）
+
+### 修复问题：
+1. [安卓导出功能] - 简化导出逻辑，移除SAF依赖
+   - 优先使用 documentDirectory（应用私有目录）
+   - 备用 cacheDirectory（缓存目录）
+   - 使用 expo-sharing 分享文件
+   - 添加详细日志便于调试
