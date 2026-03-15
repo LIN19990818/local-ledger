@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { useAppStore } from '../../src/store';
 import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '../../src/theme/colors';
 import { formatCurrency, showAlert } from '../../src/utils/helpers';
+import { File } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { TransactionRepository, CategoryRepository, AccountRepository, BudgetRepository, SettingsRepository } from '../../src/database/repository';
@@ -404,7 +405,12 @@ export default function SettingsScreen() {
         if (result.canceled || !result.assets?.[0]) return;
         
         const fileUri = result.assets[0].uri;
-        const content = await FileSystem.readAsStringAsync(fileUri);
+        console.log('导入文件URI:', fileUri);
+        
+        const file = new File(fileUri);
+        const content = await file.text();
+        console.log('文件内容长度:', content.length);
+        
         const importData = JSON.parse(content);
         await processImportData(importData);
       }
@@ -656,7 +662,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.11'
+            '1.0.12'
           )}
           
           {renderSettingItem(
