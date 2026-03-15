@@ -232,30 +232,45 @@ export default function SettingsScreen() {
         }
       } else {
         console.log('使用原生方式导出...');
-        const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
-        if (!cacheDir) {
-          showAlert('导出失败', '无法获取存储目录');
+        
+        const cacheDir = FileSystem.cacheDirectory;
+        const docDir = FileSystem.documentDirectory;
+        
+        console.log('cacheDirectory:', cacheDir);
+        console.log('documentDirectory:', docDir);
+        
+        let baseDir = cacheDir || docDir;
+        
+        if (!baseDir) {
+          showAlert('导出失败', '无法获取存储目录\n请确保应用有存储权限');
           return;
         }
         
-        const filePath = `${cacheDir}${fileName}`;
+        const filePath = `${baseDir}${fileName}`;
         console.log('文件路径:', filePath);
         
-        await FileSystem.writeAsStringAsync(filePath, content, {
-          encoding: FileSystem.EncodingType.UTF8
-        });
-        
-        const fileInfo = await FileSystem.getInfoAsync(filePath);
-        console.log('文件信息:', fileInfo);
-        
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(filePath, {
-            mimeType: 'application/json',
-            dialogTitle: '导出数据备份',
-            UTI: 'public.json'
+        try {
+          await FileSystem.writeAsStringAsync(filePath, content, {
+            encoding: FileSystem.EncodingType.UTF8
           });
-        } else {
-          showAlert('导出成功', `文件已保存到: ${filePath}`);
+          
+          const fileInfo = await FileSystem.getInfoAsync(filePath);
+          console.log('文件信息:', fileInfo);
+          
+          if (await Sharing.isAvailableAsync()) {
+            console.log('开始分享...');
+            await Sharing.shareAsync(filePath, {
+              mimeType: 'application/json',
+              dialogTitle: '导出数据备份',
+              UTI: 'public.json'
+            });
+            console.log('分享完成');
+          } else {
+            showAlert('导出成功', `文件已保存到:\n${filePath}`);
+          }
+        } catch (writeError) {
+          console.error('写入文件错误:', writeError);
+          showAlert('导出失败', `写入文件失败:\n${writeError instanceof Error ? writeError.message : '未知错误'}`);
         }
       }
     } catch (error) {
@@ -309,25 +324,35 @@ export default function SettingsScreen() {
           showAlert('导出失败', 'CSV文件下载失败，请重试');
         }
       } else {
-        const cacheDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        let cacheDir = FileSystem.cacheDirectory;
         if (!cacheDir) {
-          showAlert('导出失败', '无法获取存储目录');
+          cacheDir = FileSystem.documentDirectory;
+        }
+        
+        if (!cacheDir) {
+          showAlert('导出失败', '无法获取存储目录\n请确保应用有存储权限');
           return;
         }
         
         const filePath = `${cacheDir}${fileName}`;
-        await FileSystem.writeAsStringAsync(filePath, csvContent, {
-          encoding: FileSystem.EncodingType.UTF8
-        });
         
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(filePath, {
-            mimeType: 'text/csv',
-            dialogTitle: '导出CSV文件',
-            UTI: 'public.comma-separated-values-text'
+        try {
+          await FileSystem.writeAsStringAsync(filePath, csvContent, {
+            encoding: FileSystem.EncodingType.UTF8
           });
-        } else {
-          showAlert('导出成功', `文件已保存到: ${filePath}`);
+          
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(filePath, {
+              mimeType: 'text/csv',
+              dialogTitle: '导出CSV文件',
+              UTI: 'public.comma-separated-values-text'
+            });
+          } else {
+            showAlert('导出成功', `文件已保存到:\n${filePath}`);
+          }
+        } catch (writeError) {
+          console.error('CSV写入文件错误:', writeError);
+          showAlert('导出失败', `写入文件失败:\n${writeError instanceof Error ? writeError.message : '未知错误'}`);
         }
       }
     } catch (error) {
@@ -654,7 +679,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.6'
+            '1.0.7'
           )}
           
           {renderSettingItem(
