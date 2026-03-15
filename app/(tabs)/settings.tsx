@@ -14,7 +14,6 @@ import { useRouter } from 'expo-router';
 import { useAppStore } from '../../src/store';
 import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '../../src/theme/colors';
 import { formatCurrency, showAlert } from '../../src/utils/helpers';
-import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { TransactionRepository, CategoryRepository, AccountRepository, BudgetRepository, SettingsRepository } from '../../src/database/repository';
@@ -22,7 +21,7 @@ import { format } from 'date-fns';
 import { Platform } from 'react-native';
 import { Transaction, Category, Account, Settings } from '../../src/types';
 import { PasswordModal } from '../../src/components/PasswordModal';
-import { getAvailableStorageDirectory } from '../../src/utils/storageHelper';
+import { exportFile, shareExportedFile } from '../../src/utils/storageHelper';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -232,43 +231,25 @@ export default function SettingsScreen() {
           showAlert('导出失败', `文件下载失败: ${webError instanceof Error ? webError.message : '未知错误'}`);
         }
       } else {
-        console.log('使用原生方式导出...');
-        console.log('Platform:', Platform.OS);
+        console.log('使用原生方式导出 (Android 16)...');
         
         try {
-          const storageInfo = await getAvailableStorageDirectory();
-          console.log('存储目录信息:', storageInfo);
+          const result = await exportFile(fileName, content);
           
-          if (!storageInfo.available || !storageInfo.directory) {
-            console.error('没有可用的存储目录');
-            showAlert('导出失败', '无法获取可用的存储目录\n请确保应用有存储权限');
+          if (!result.success || !result.uri) {
+            console.error('导出失败:', result.error);
+            showAlert('导出失败', result.error || '无法导出文件');
             return;
           }
           
-          const filePath = `${storageInfo.directory}${fileName}`;
-          console.log('文件路径:', filePath);
+          console.log('文件导出成功:', result.uri);
           
-          await FileSystem.writeAsStringAsync(filePath, content, {
-            encoding: FileSystem.EncodingType.UTF8
-          });
+          const shared = await shareExportedFile(result.uri, 'application/json', '导出数据备份');
           
-          console.log('文件写入成功');
-          
-          const fileInfo = await FileSystem.getInfoAsync(filePath);
-          console.log('文件信息:', fileInfo);
-          
-          const shareAvailable = await Sharing.isAvailableAsync();
-          console.log('Sharing available:', shareAvailable);
-          
-          if (shareAvailable) {
-            console.log('开始分享...');
-            await Sharing.shareAsync(filePath, {
-              mimeType: 'application/json',
-              dialogTitle: '导出数据备份'
-            });
-            console.log('分享完成');
+          if (shared) {
+            console.log('分享成功');
           } else {
-            showAlert('导出成功', `文件已保存到:\n${filePath}`);
+            showAlert('导出成功', `文件已保存到:\n${result.uri}`);
           }
         } catch (exportError) {
           console.error('Export error details:', exportError);
@@ -326,34 +307,25 @@ export default function SettingsScreen() {
           showAlert('导出失败', 'CSV文件下载失败，请重试');
         }
       } else {
-        console.log('CSV导出 - 使用原生方式...');
+        console.log('CSV导出 - 使用原生方式 (Android 16)...');
         
         try {
-          const storageInfo = await getAvailableStorageDirectory();
-          console.log('CSV存储目录信息:', storageInfo);
+          const result = await exportFile(fileName, csvContent);
           
-          if (!storageInfo.available || !storageInfo.directory) {
-            console.error('CSV: 没有可用的存储目录');
-            showAlert('导出失败', '无法获取可用的存储目录\n请确保应用有存储权限');
+          if (!result.success || !result.uri) {
+            console.error('CSV导出失败:', result.error);
+            showAlert('导出失败', result.error || '无法导出文件');
             return;
           }
           
-          const filePath = `${storageInfo.directory}${fileName}`;
-          console.log('CSV文件路径:', filePath);
+          console.log('CSV文件导出成功:', result.uri);
           
-          await FileSystem.writeAsStringAsync(filePath, csvContent, {
-            encoding: FileSystem.EncodingType.UTF8
-          });
+          const shared = await shareExportedFile(result.uri, 'text/csv', '导出CSV文件');
           
-          console.log('CSV文件写入成功');
-          
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(filePath, {
-              mimeType: 'text/csv',
-              dialogTitle: '导出CSV文件'
-            });
+          if (shared) {
+            console.log('CSV分享成功');
           } else {
-            showAlert('导出成功', `文件已保存到:\n${filePath}`);
+            showAlert('导出成功', `文件已保存到:\n${result.uri}`);
           }
         } catch (exportError) {
           console.error('CSV export error details:', exportError);
@@ -684,7 +656,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.10'
+            '1.0.11'
           )}
           
           {renderSettingItem(

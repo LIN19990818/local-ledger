@@ -139,3 +139,15 @@
    - 自动创建目录并测试可写性
    - 添加详细的调试日志
    - 改进错误提示信息
+
+---
+
+## 版本号：v1.0.11（同步日期：2026-03-15）
+
+### 修复问题：
+1. [安卓导出功能] - 完全重写导出功能以支持 Android 16
+   - 使用 expo-file-system SDK 55 新 API（File, Directory, Paths）
+   - 移除旧版 FileSystem API 混用问题
+   - 统一使用 File.write() 和 Sharing.shareAsync()
+   - 应用私有目录无需存储权限（符合分区存储规范）
+   - 添加完整的错误处理和日志
