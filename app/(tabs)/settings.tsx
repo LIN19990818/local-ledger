@@ -662,7 +662,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.12'
+            '1.0.13'
           )}
           
           {renderSettingItem(
