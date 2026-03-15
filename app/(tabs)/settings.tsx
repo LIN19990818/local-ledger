@@ -233,17 +233,28 @@ export default function SettingsScreen() {
       } else {
         console.log('使用原生方式导出...');
         
-        const cacheDir = FileSystem.cacheDirectory;
-        const docDir = FileSystem.documentDirectory;
+        let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
         
-        console.log('cacheDirectory:', cacheDir);
-        console.log('documentDirectory:', docDir);
-        
-        let baseDir = cacheDir || docDir;
+        console.log('cacheDirectory:', FileSystem.cacheDirectory);
+        console.log('documentDirectory:', FileSystem.documentDirectory);
+        console.log('baseDir:', baseDir);
         
         if (!baseDir) {
-          showAlert('导出失败', '无法获取存储目录\n请确保应用有存储权限');
-          return;
+          try {
+            console.log('尝试使用 StorageAccessFramework...');
+            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+            if (permissions.granted) {
+              baseDir = permissions.directoryUri;
+              console.log('SAF 目录:', baseDir);
+            } else {
+              showAlert('导出失败', '需要存储权限才能导出数据');
+              return;
+            }
+          } catch (safError) {
+            console.error('SAF error:', safError);
+            showAlert('导出失败', '无法获取存储权限\n请到设置中授予应用存储权限');
+            return;
+          }
         }
         
         const filePath = `${baseDir}${fileName}`;
@@ -324,17 +335,26 @@ export default function SettingsScreen() {
           showAlert('导出失败', 'CSV文件下载失败，请重试');
         }
       } else {
-        let cacheDir = FileSystem.cacheDirectory;
-        if (!cacheDir) {
-          cacheDir = FileSystem.documentDirectory;
+        let baseDir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+        
+        if (!baseDir) {
+          try {
+            console.log('CSV导出 - 尝试使用 StorageAccessFramework...');
+            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+            if (permissions.granted) {
+              baseDir = permissions.directoryUri;
+            } else {
+              showAlert('导出失败', '需要存储权限才能导出数据');
+              return;
+            }
+          } catch (safError) {
+            console.error('CSV SAF error:', safError);
+            showAlert('导出失败', '无法获取存储权限\n请到设置中授予应用存储权限');
+            return;
+          }
         }
         
-        if (!cacheDir) {
-          showAlert('导出失败', '无法获取存储目录\n请确保应用有存储权限');
-          return;
-        }
-        
-        const filePath = `${cacheDir}${fileName}`;
+        const filePath = `${baseDir}${fileName}`;
         
         try {
           await FileSystem.writeAsStringAsync(filePath, csvContent, {
@@ -679,7 +699,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.7'
+            '1.0.8'
           )}
           
           {renderSettingItem(
