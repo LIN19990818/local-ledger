@@ -23,6 +23,14 @@ import { Platform } from 'react-native';
 import { Transaction, Category, Account, Settings } from '../../src/types';
 import { PasswordModal } from '../../src/components/PasswordModal';
 import { exportFile, shareExportedFile } from '../../src/utils/storageHelper';
+import { 
+  checkAndPerformAutoBackup, 
+  getBackupFiles, 
+  performAutoBackup,
+  formatBackupSize,
+  formatBackupDate,
+  BackupInfo 
+} from '../../src/utils/autoBackup';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -44,12 +52,65 @@ export default function SettingsScreen() {
   const [oldPassword, setOldPassword] = useState('');
   const [passwordError, setPasswordError] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [backupFiles, setBackupFiles] = useState<BackupInfo[]>([]);
+  const [showBackupModal, setShowBackupModal] = useState(false);
 
   useEffect(() => {
     if (budget) {
       setBudgetAmount(String(budget.amount));
     }
   }, [budget]);
+
+  useEffect(() => {
+    const initAutoBackup = async () => {
+      const result = await checkAndPerformAutoBackup();
+      if (result) {
+        console.log('自动备份结果:', result.message);
+      }
+      await loadBackupFiles();
+    };
+    initAutoBackup();
+  }, []);
+
+  const loadBackupFiles = async () => {
+    const files = await getBackupFiles();
+    setBackupFiles(files);
+  };
+
+  const handleToggleAutoBackup = async () => {
+    if (settings) {
+      await updateSettings({
+        ...settings,
+        autoBackup: !settings.autoBackup
+      });
+      showAlert(
+        settings.autoBackup ? '已关闭' : '已开启',
+        settings.autoBackup ? '自动备份已关闭' : '自动备份已开启，每天自动备份一次'
+      );
+    }
+  };
+
+  const handleManualBackup = async () => {
+    showAlert('手动备份', '确定要立即创建备份吗？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '确定',
+        onPress: async () => {
+          const result = await performAutoBackup();
+          if (result.success) {
+            await loadBackupFiles();
+            showAlert('备份成功', `备份文件已创建\n${result.backupInfo?.fileName}`);
+          } else {
+            showAlert('备份失败', result.message);
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleViewBackups = () => {
+    setShowBackupModal(true);
+  };
 
   const handleSetBudget = async () => {
     const amount = parseFloat(budgetAmount);
@@ -590,6 +651,30 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>数据管理</Text>
           
           {renderSettingItem(
+            'cloud-upload',
+            '自动备份',
+            settings?.autoBackup ? '已开启（每天备份一次）' : '已关闭',
+            undefined,
+            handleToggleAutoBackup
+          )}
+          
+          {renderSettingItem(
+            'save',
+            '手动备份',
+            '立即创建备份文件',
+            undefined,
+            handleManualBackup
+          )}
+          
+          {renderSettingItem(
+            'folder',
+            '备份文件',
+            `共 ${backupFiles.length} 个备份文件`,
+            undefined,
+            handleViewBackups
+          )}
+          
+          {renderSettingItem(
             'download',
             '导出数据',
             '导出所有账单数据为JSON文件',
@@ -662,7 +747,7 @@ export default function SettingsScreen() {
           {renderSettingItem(
             'information-circle',
             '版本',
-            '1.0.13'
+            '1.0.15'
           )}
           
           {renderSettingItem(
@@ -930,6 +1015,52 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showBackupModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowBackupModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>备份文件</Text>
+            <Text style={styles.modalSubtitle}>最多保留2个最新备份</Text>
+            
+            <ScrollView style={styles.backupList}>
+              {backupFiles.length === 0 ? (
+                <Text style={styles.noBackupText}>暂无备份文件</Text>
+              ) : (
+                backupFiles.map((file, index) => (
+                  <View key={file.fileName} style={styles.backupItem}>
+                    <View style={styles.backupInfo}>
+                      <Ionicons name="document-text" size={24} color={colors.primary} />
+                      <View style={styles.backupDetails}>
+                        <Text style={styles.backupName}>{file.fileName}</Text>
+                        <Text style={styles.backupMeta}>
+                          {formatBackupDate(file.createdAt)} · {formatBackupSize(file.size)}
+                        </Text>
+                      </View>
+                    </View>
+                    {index === 0 && (
+                      <View style={styles.latestBadge}>
+                        <Text style={styles.latestText}>最新</Text>
+                      </View>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setShowBackupModal(false)}
+            >
+              <Text style={styles.modalButtonText}>关闭</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1114,5 +1245,60 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
     marginTop: spacing.xs
+  },
+  modalSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary.light,
+    textAlign: 'center',
+    marginBottom: spacing.md
+  },
+  backupList: {
+    maxHeight: 300,
+    marginBottom: spacing.md
+  },
+  noBackupText: {
+    fontSize: fontSize.md,
+    color: colors.text.secondary.light,
+    textAlign: 'center',
+    padding: spacing.xl
+  },
+  backupItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: spacing.md,
+    backgroundColor: colors.surface.light,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm
+  },
+  backupInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1
+  },
+  backupDetails: {
+    marginLeft: spacing.md,
+    flex: 1
+  },
+  backupName: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+    color: colors.text.primary.light
+  },
+  backupMeta: {
+    fontSize: fontSize.sm,
+    color: colors.text.secondary.light,
+    marginTop: 2
+  },
+  latestBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm
+  },
+  latestText: {
+    fontSize: fontSize.xs,
+    color: '#FFFFFF',
+    fontWeight: fontWeight.medium
   }
 });
