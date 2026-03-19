@@ -21,16 +21,22 @@ export interface AutoBackupResult {
 }
 
 async function getBackupDirectory(): Promise<Directory | null> {
-  const baseDir = Paths.document || Paths.cache;
-  if (!baseDir) return null;
-  
-  const backupDir = new Directory(baseDir, BACKUP_DIR_NAME);
-  
-  if (!backupDir.exists) {
-    backupDir.create({ intermediates: true });
+  try {
+    const baseDir = Paths.document || Paths.cache;
+    if (!baseDir) return null;
+    
+    const backupDir = new Directory(baseDir, BACKUP_DIR_NAME);
+    
+    const exists = await backupDir.exists();
+    if (!exists) {
+      await backupDir.create({ intermediates: true });
+    }
+    
+    return backupDir;
+  } catch (error) {
+    console.error('获取备份目录失败:', error);
+    return null;
   }
-  
-  return backupDir;
 }
 
 export async function getBackupFiles(): Promise<BackupInfo[]> {
@@ -38,18 +44,22 @@ export async function getBackupFiles(): Promise<BackupInfo[]> {
     const backupDir = await getBackupDirectory();
     if (!backupDir) return [];
     
-    const files = backupDir.list();
+    const files = await backupDir.list();
     const backupFiles: BackupInfo[] = [];
     
     for (const file of files) {
       if (file instanceof File && file.name.endsWith('.json')) {
-        const info = file.info();
-        backupFiles.push({
-          fileName: file.name,
-          uri: file.uri,
-          createdAt: info.modificationTime || 0,
-          size: info.size || 0
-        });
+        try {
+          const info = await file.info();
+          backupFiles.push({
+            fileName: file.name,
+            uri: file.uri,
+            createdAt: info?.modificationTime || 0,
+            size: info?.size || 0
+          });
+        } catch (e) {
+          console.warn('获取文件信息失败:', file.name, e);
+        }
       }
     }
     
@@ -97,9 +107,13 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
     while (existingBackups.length > MAX_BACKUP_FILES) {
       const oldestBackup = existingBackups.pop();
       if (oldestBackup) {
-        const oldFile = new File(oldestBackup.uri);
-        await oldFile.delete();
-        console.log('删除旧备份:', oldestBackup.fileName);
+        try {
+          const oldFile = new File(oldestBackup.uri);
+          await oldFile.delete();
+          console.log('删除旧备份:', oldestBackup.fileName);
+        } catch (e) {
+          console.warn('删除旧备份失败:', oldestBackup.fileName, e);
+        }
       }
     }
     
