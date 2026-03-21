@@ -21,18 +21,55 @@ export interface AutoBackupResult {
 }
 
 async function getBackupDirectory(): Promise<Directory | null> {
+  console.log('=== 获取备份目录 ===');
+  
   try {
-    const baseDir = Paths.document || Paths.cache;
-    if (!baseDir) return null;
+    console.log('Paths.document:', Paths.document?.uri);
+    console.log('Paths.cache:', Paths.cache?.uri);
     
-    const backupDir = new Directory(baseDir, BACKUP_DIR_NAME);
+    const candidates = [
+      { dir: Paths.document, name: 'document目录' },
+      { dir: Paths.cache, name: 'cache目录' },
+    ];
     
-    const exists = await backupDir.exists();
-    if (!exists) {
-      await backupDir.create({ intermediates: true });
+    for (const candidate of candidates) {
+      if (!candidate.dir) {
+        console.log(`跳过 ${candidate.name}: 目录为空`);
+        continue;
+      }
+      
+      console.log(`检查 ${candidate.name}: ${candidate.dir.uri}`);
+      
+      try {
+        const exists = candidate.dir.exists;
+        console.log(`${candidate.name} exists:`, exists);
+        
+        if (!exists) {
+          console.log(`创建 ${candidate.name}...`);
+          candidate.dir.create({ intermediates: true });
+          console.log(`${candidate.name} 创建成功`);
+        }
+        
+        const backupDir = new Directory(candidate.dir, BACKUP_DIR_NAME);
+        console.log(`备份目录路径: ${backupDir.uri}`);
+        
+        const backupExists = backupDir.exists;
+        if (!backupExists) {
+          console.log('创建备份目录...');
+          backupDir.create({ intermediates: true });
+          console.log('备份目录创建成功');
+        }
+        
+        console.log(`✅ 备份目录可用: ${backupDir.uri}`);
+        return backupDir;
+      } catch (dirError) {
+        console.warn(`❌ ${candidate.name} 不可用:`, dirError);
+        continue;
+      }
     }
     
-    return backupDir;
+    console.error('所有存储目录都不可用');
+    return null;
   } catch (error) {
     console.error('获取备份目录失败:', error);
     return null;
@@ -44,13 +81,13 @@ export async function getBackupFiles(): Promise<BackupInfo[]> {
     const backupDir = await getBackupDirectory();
     if (!backupDir) return [];
     
-    const files = await backupDir.list();
+    const files = backupDir.list();
     const backupFiles: BackupInfo[] = [];
     
     for (const file of files) {
       if (file instanceof File && file.name.endsWith('.json')) {
         try {
-          const info = await file.info();
+          const info = file.info();
           backupFiles.push({
             fileName: file.name,
             uri: file.uri,
@@ -99,8 +136,9 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
     const content = JSON.stringify(backupData, null, 2);
     
     const backupFile = new File(backupDir, fileName);
-    await backupFile.write(content, { encoding: 'utf8' });
+    console.log('备份文件路径:', backupFile.uri);
     
+    await backupFile.write(content, { encoding: 'utf8' });
     console.log('备份文件创建成功:', fileName);
     
     const existingBackups = await getBackupFiles();
