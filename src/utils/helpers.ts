@@ -21,14 +21,14 @@ export const showAlert = (
       const result = window.confirm(fullMessage);
       
       if (result && confirmBtn?.onPress) {
-        confirmBtn.onPress();
+        Promise.resolve(confirmBtn.onPress()).catch(console.error);
       } else if (!result && cancelBtn?.onPress) {
-        cancelBtn.onPress();
+        Promise.resolve(cancelBtn.onPress()).catch(console.error);
       }
     } else {
       window.alert(message ? `${title}\n\n${message}` : title);
       if (buttons && buttons[0]?.onPress) {
-        buttons[0].onPress();
+        Promise.resolve(buttons[0].onPress()).catch(console.error);
       }
     }
   } else {
