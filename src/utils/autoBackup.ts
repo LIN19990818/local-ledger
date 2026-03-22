@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Directory, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 import { TransactionRepository, CategoryRepository, AccountRepository, BudgetRepository, SettingsRepository } from '../database/repository';
 import { format } from 'date-fns';
@@ -20,21 +20,18 @@ export interface AutoBackupResult {
   backupInfo?: BackupInfo;
 }
 
-async function getBackupDirectory(): Promise<string | null> {
+async function getBackupDirectory(): Promise<Directory | null> {
   console.log('=== 获取备份目录 ===');
   console.log('Platform:', Platform.OS);
   console.log('Platform.Version:', Platform.Version);
   
   try {
-    const documentDir = FileSystem.documentDirectory;
-    const cacheDir = FileSystem.cacheDirectory;
-    
-    console.log('documentDirectory:', documentDir);
-    console.log('cacheDirectory:', cacheDir);
+    console.log('Paths.cache:', Paths.cache?.uri);
+    console.log('Paths.document:', Paths.document?.uri);
     
     const candidates = [
-      { dir: documentDir, name: 'document目录' },
-      { dir: cacheDir, name: 'cache目录' },
+      { dir: Paths.document, name: 'document目录' },
+      { dir: Paths.cache, name: 'cache目录' },
     ];
     
     for (const candidate of candidates) {
@@ -43,41 +40,41 @@ async function getBackupDirectory(): Promise<string | null> {
         continue;
       }
       
-      console.log(`检查 ${candidate.name}: ${candidate.dir}`);
+      console.log(`检查 ${candidate.name}: ${candidate.dir.uri}`);
       
       try {
-        const dirInfo = await FileSystem.getInfoAsync(candidate.dir);
-        console.log(`${candidate.name} exists:`, dirInfo.exists);
+        const exists = candidate.dir.exists;
+        console.log(`${candidate.name} exists:`, exists);
         
-        if (!dirInfo.exists) {
+        if (!exists) {
           console.log(`创建 ${candidate.name}...`);
-          await FileSystem.makeDirectoryAsync(candidate.dir, { intermediates: true });
+          candidate.dir.create({ intermediates: true });
           console.log(`${candidate.name} 创建成功`);
         }
         
-        const backupDir = `${candidate.dir}${BACKUP_DIR_NAME}/`;
-        console.log(`备份目录路径: ${backupDir}`);
+        const backupDir = new Directory(candidate.dir, BACKUP_DIR_NAME);
+        console.log(`备份目录路径: ${backupDir.uri}`);
         
-        const backupInfo = await FileSystem.getInfoAsync(backupDir);
-        console.log(`备份目录 exists:`, backupInfo.exists);
+        const backupExists = backupDir.exists;
+        console.log(`备份目录 exists:`, backupExists);
         
-        if (!backupInfo.exists) {
+        if (!backupExists) {
           console.log('创建备份目录...');
-          await FileSystem.makeDirectoryAsync(backupDir, { intermediates: true });
+          backupDir.create({ intermediates: true });
           console.log('备份目录创建成功');
         }
         
         const testFileName = `test_${Date.now()}.txt`;
-        const testFileUri = `${backupDir}${testFileName}`;
-        console.log(`测试写入文件: ${testFileUri}`);
+        const testFile = new File(backupDir, testFileName);
+        console.log(`测试写入文件: ${testFile.uri}`);
         
-        await FileSystem.writeAsStringAsync(testFileUri, 'test');
+        await testFile.write('test', { encoding: 'utf8' });
         console.log('测试写入成功');
         
-        await FileSystem.deleteAsync(testFileUri);
+        testFile.delete();
         console.log('测试文件删除成功');
         
-        console.log(`✅ 备份目录可用: ${backupDir}`);
+        console.log(`✅ 备份目录可用: ${backupDir.uri}`);
         return backupDir;
       } catch (dirError) {
         console.error(`❌ ${candidate.name} 不可用:`, dirError);
@@ -100,24 +97,23 @@ export async function getBackupFiles(): Promise<BackupInfo[]> {
     const backupDir = await getBackupDirectory();
     if (!backupDir) return [];
     
-    const files = await FileSystem.readDirectoryAsync(backupDir);
+    const files = backupDir.list();
     console.log('备份目录文件列表:', files?.length || 0);
     
     const backupFiles: BackupInfo[] = [];
     
-    for (const fileName of files) {
-      if (fileName.endsWith('.json')) {
+    for (const file of files) {
+      if (file instanceof File && file.name.endsWith('.json')) {
         try {
-          const fileUri = `${backupDir}${fileName}`;
-          const info = await FileSystem.getInfoAsync(fileUri);
+          const info = file.info();
           backupFiles.push({
-            fileName,
-            uri: fileUri,
-            createdAt: info.modificationTime || 0,
-            size: info.size || 0
+            fileName: file.name,
+            uri: file.uri,
+            createdAt: info?.modificationTime || 0,
+            size: info?.size || 0
           });
         } catch (e) {
-          console.warn('获取文件信息失败:', fileName, e);
+          console.warn('获取文件信息失败:', file.name, e);
         }
       }
     }
@@ -166,13 +162,13 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
     
     const fileName = `auto_backup_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.json`;
     const content = JSON.stringify(backupData, null, 2);
-    const fileUri = `${backupDir}${fileName}`;
     
-    console.log('备份文件路径:', fileUri);
+    const backupFile = new File(backupDir, fileName);
+    console.log('备份文件路径:', backupFile.uri);
     console.log('备份内容长度:', content.length);
     
     console.log('开始写入文件...');
-    await FileSystem.writeAsStringAsync(fileUri, content);
+    await backupFile.write(content, { encoding: 'utf8' });
     console.log('备份文件创建成功:', fileName);
     
     const existingBackups = await getBackupFiles();
@@ -182,7 +178,8 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
       const oldestBackup = existingBackups.pop();
       if (oldestBackup) {
         try {
-          await FileSystem.deleteAsync(oldestBackup.uri);
+          const oldFile = new File(oldestBackup.uri);
+          oldFile.delete();
           console.log('删除旧备份:', oldestBackup.fileName);
         } catch (e) {
           console.warn('删除旧备份失败:', oldestBackup.fileName, e);
@@ -203,7 +200,7 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
       message: '自动备份成功',
       backupInfo: {
         fileName,
-        uri: fileUri,
+        uri: backupFile.uri,
         createdAt: Date.now(),
         size: content.length
       }
