@@ -87,7 +87,26 @@ export const initNativeDatabase = async (): Promise<void> => {
     CREATE INDEX IF NOT EXISTS idx_budgets_month ON budgets(month);
   `);
   
+  await runMigrations();
+  
   await initDefaultData();
+};
+
+const runMigrations = async (): Promise<void> => {
+  if (!db) return;
+  
+  try {
+    const tableInfo = await db.getAllAsync<any>("PRAGMA table_info(categories)");
+    const hasSortOrder = tableInfo.some((col: any) => col.name === 'sortOrder');
+    
+    if (!hasSortOrder) {
+      console.log('添加 sortOrder 字段...');
+      await db.execAsync('ALTER TABLE categories ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0');
+      console.log('sortOrder 字段添加成功');
+    }
+  } catch (error) {
+    console.error('数据库迁移失败:', error);
+  }
 };
 
 const defaultCategoriesData: Omit<Category, 'createdAt' | 'updatedAt'>[] = [
