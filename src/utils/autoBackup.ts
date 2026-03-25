@@ -23,7 +23,6 @@ export interface AutoBackupResult {
 async function getBackupDirectory(): Promise<Directory | null> {
   console.log('=== 获取备份目录 ===');
   console.log('Platform:', Platform.OS);
-  console.log('Platform.Version:', Platform.Version);
   
   try {
     console.log('Paths.cache:', Paths.cache?.uri);
@@ -66,19 +65,18 @@ async function getBackupDirectory(): Promise<Directory | null> {
         
         const testFileName = `test_${Date.now()}.txt`;
         const testFile = new File(backupDir, testFileName);
+        
         console.log(`测试写入文件: ${testFile.uri}`);
-        
         await testFile.write('test', { encoding: 'utf8' });
-        console.log('测试写入成功');
+        console.log('写入成功');
         
-        testFile.delete();
+        await testFile.delete();
         console.log('测试文件删除成功');
         
         console.log(`✅ 备份目录可用: ${backupDir.uri}`);
         return backupDir;
       } catch (dirError) {
-        console.error(`❌ ${candidate.name} 不可用:`, dirError);
-        console.error('错误详情:', JSON.stringify(dirError, Object.getOwnPropertyNames(dirError)));
+        console.warn(`❌ ${candidate.name} 不可用:`, dirError);
         continue;
       }
     }
@@ -87,7 +85,6 @@ async function getBackupDirectory(): Promise<Directory | null> {
     return null;
   } catch (error) {
     console.error('获取备份目录失败:', error);
-    console.error('错误详情:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     return null;
   }
 }
@@ -136,19 +133,10 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
     
     console.log('获取数据...');
     const transactions = await TransactionRepository.getAll();
-    console.log('transactions:', transactions?.length || 0);
-    
     const categories = await CategoryRepository.getAll();
-    console.log('categories:', categories?.length || 0);
-    
     const account = await AccountRepository.get();
-    console.log('account:', account ? 'exists' : 'null');
-    
     const budgets = await BudgetRepository.getAll();
-    console.log('budgets:', budgets?.length || 0);
-    
     const settings = await SettingsRepository.get();
-    console.log('settings:', settings ? 'exists' : 'null');
     
     const backupData = {
       version: BACKUP_VERSION,
@@ -179,7 +167,7 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
       if (oldestBackup) {
         try {
           const oldFile = new File(oldestBackup.uri);
-          oldFile.delete();
+          await oldFile.delete();
           console.log('删除旧备份:', oldestBackup.fileName);
         } catch (e) {
           console.warn('删除旧备份失败:', oldestBackup.fileName, e);
@@ -207,7 +195,6 @@ export async function performAutoBackup(): Promise<AutoBackupResult> {
     };
   } catch (error) {
     console.error('自动备份失败:', error);
-    console.error('错误详情:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
     return {
       success: false,
       message: error instanceof Error ? error.message : '备份失败，请查看日志'
