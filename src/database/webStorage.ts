@@ -18,21 +18,21 @@ const generateId = (): string => {
 let initialized = false;
 
 const defaultCategoriesData: Omit<Category, 'createdAt' | 'updatedAt'>[] = [
-  { id: 'food', name: '餐饮', icon: '🍜', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'transport', name: '交通', icon: '🚌', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'shopping', name: '购物', icon: '🛒', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'entertainment', name: '娱乐', icon: '🎮', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'medical', name: '医疗', icon: '💊', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'education', name: '教育', icon: '📚', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'housing', name: '住房', icon: '🏠', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'communication', name: '通讯', icon: '📱', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'other_expense', name: '其他支出', icon: '📦', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'salary', name: '工资', icon: '💰', type: 'income', isDefault: true, isVisible: true },
-  { id: 'bonus', name: '奖金', icon: '🎁', type: 'income', isDefault: true, isVisible: true },
-  { id: 'investment', name: '投资收益', icon: '📈', type: 'income', isDefault: true, isVisible: true },
-  { id: 'parttime', name: '兼职', icon: '💼', type: 'income', isDefault: true, isVisible: true },
-  { id: 'reimbursement', name: '报销', icon: '🧾', type: 'income', isDefault: true, isVisible: true },
-  { id: 'other_income', name: '其他收入', icon: '💵', type: 'income', isDefault: true, isVisible: true },
+  { id: 'food', name: '餐饮', icon: '🍜', type: 'expense', isDefault: true, isVisible: true, sortOrder: 0 },
+  { id: 'transport', name: '交通', icon: '🚌', type: 'expense', isDefault: true, isVisible: true, sortOrder: 1 },
+  { id: 'shopping', name: '购物', icon: '🛒', type: 'expense', isDefault: true, isVisible: true, sortOrder: 2 },
+  { id: 'entertainment', name: '娱乐', icon: '🎮', type: 'expense', isDefault: true, isVisible: true, sortOrder: 3 },
+  { id: 'medical', name: '医疗', icon: '💊', type: 'expense', isDefault: true, isVisible: true, sortOrder: 4 },
+  { id: 'education', name: '教育', icon: '📚', type: 'expense', isDefault: true, isVisible: true, sortOrder: 5 },
+  { id: 'housing', name: '住房', icon: '🏠', type: 'expense', isDefault: true, isVisible: true, sortOrder: 6 },
+  { id: 'communication', name: '通讯', icon: '📱', type: 'expense', isDefault: true, isVisible: true, sortOrder: 7 },
+  { id: 'other_expense', name: '其他支出', icon: '📦', type: 'expense', isDefault: true, isVisible: true, sortOrder: 8 },
+  { id: 'salary', name: '工资', icon: '💰', type: 'income', isDefault: true, isVisible: true, sortOrder: 0 },
+  { id: 'bonus', name: '奖金', icon: '🎁', type: 'income', isDefault: true, isVisible: true, sortOrder: 1 },
+  { id: 'investment', name: '投资收益', icon: '📈', type: 'income', isDefault: true, isVisible: true, sortOrder: 2 },
+  { id: 'parttime', name: '兼职', icon: '💼', type: 'income', isDefault: true, isVisible: true, sortOrder: 3 },
+  { id: 'reimbursement', name: '报销', icon: '🧾', type: 'income', isDefault: true, isVisible: true, sortOrder: 4 },
+  { id: 'other_income', name: '其他收入', icon: '💵', type: 'income', isDefault: true, isVisible: true, sortOrder: 5 },
 ];
 
 export const initDatabase = async (): Promise<void> => {
@@ -413,7 +413,8 @@ export const CategoryRepository = {
     const categories = await getCategories();
     const now = Date.now();
     const id = generateId();
-    const newCategory: Category = { ...category, id, createdAt: now, updatedAt: now };
+    const sortOrder = category.sortOrder ?? categories.length;
+    const newCategory: Category = { ...category, id, sortOrder, createdAt: now, updatedAt: now };
     categories.push(newCategory);
     await saveCategories(categories);
     return newCategory;
@@ -452,9 +453,27 @@ export const CategoryRepository = {
       categories = categories.filter(c => c.type === type);
     }
     return categories.sort((a, b) => {
+      if ((a.sortOrder ?? 0) !== (b.sortOrder ?? 0)) {
+        return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      }
       if (a.isDefault !== b.isDefault) return b.isDefault ? 1 : -1;
       return a.name.localeCompare(b.name);
     });
+  },
+  
+  async updateSortOrder(categoryIds: string[]): Promise<void> {
+    const categories = await getCategories();
+    const now = Date.now();
+    
+    for (let i = 0; i < categoryIds.length; i++) {
+      const index = categories.findIndex(c => c.id === categoryIds[i]);
+      if (index !== -1) {
+        categories[index].sortOrder = i;
+        categories[index].updatedAt = now;
+      }
+    }
+    
+    await saveCategories(categories);
   }
 };
 

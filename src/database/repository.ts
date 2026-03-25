@@ -32,6 +32,7 @@ const mapRowToCategory = (row: any): Category => {
     type: row.type,
     isDefault: row.isDefault === 1,
     isVisible: row.isVisible === 1,
+    sortOrder: row.sortOrder ?? 0,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };
@@ -450,14 +451,15 @@ export const CategoryRepository = {
     const db = await getNativeDB();
     const now = Date.now();
     const id = generateId();
+    const sortOrder = category.sortOrder ?? 0;
     
     await db.runAsync(
-      `INSERT INTO categories (id, name, icon, type, isDefault, isVisible, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, category.name, category.icon, category.type, category.isDefault ? 1 : 0, category.isVisible ? 1 : 0, now, now]
+      `INSERT INTO categories (id, name, icon, type, isDefault, isVisible, sortOrder, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, category.name, category.icon, category.type, category.isDefault ? 1 : 0, category.isVisible ? 1 : 0, sortOrder, now, now]
     );
     
-    return { ...category, id, createdAt: now, updatedAt: now };
+    return { ...category, id, sortOrder, createdAt: now, updatedAt: now };
   },
   
   async update(id: string, updates: Partial<Category>): Promise<Category | null> {
@@ -474,8 +476,8 @@ export const CategoryRepository = {
     const updated = { ...existing, ...updates, updatedAt: now };
     
     await db.runAsync(
-      `UPDATE categories SET name = ?, icon = ?, type = ?, isDefault = ?, isVisible = ?, updatedAt = ? WHERE id = ?`,
-      [updated.name, updated.icon, updated.type, updated.isDefault ? 1 : 0, updated.isVisible ? 1 : 0, now, id]
+      `UPDATE categories SET name = ?, icon = ?, type = ?, isDefault = ?, isVisible = ?, sortOrder = ?, updatedAt = ? WHERE id = ?`,
+      [updated.name, updated.icon, updated.type, updated.isDefault ? 1 : 0, updated.isVisible ? 1 : 0, updated.sortOrder ?? 0, now, id]
     );
     
     return updated;
@@ -521,10 +523,27 @@ export const CategoryRepository = {
       params.push(type);
     }
     
-    query += ' ORDER BY isDefault DESC, name ASC';
+    query += ' ORDER BY sortOrder ASC, isDefault DESC, name ASC';
     
     const rows = await db.getAllAsync<any>(query, params);
     return rows.map(mapRowToCategory);
+  },
+  
+  async updateSortOrder(categoryIds: string[]): Promise<void> {
+    if (isWeb) {
+      const webRepo = await import('./webStorage');
+      return webRepo.CategoryRepository.updateSortOrder(categoryIds);
+    }
+    
+    const db = await getNativeDB();
+    const now = Date.now();
+    
+    for (let i = 0; i < categoryIds.length; i++) {
+      await db.runAsync(
+        'UPDATE categories SET sortOrder = ?, updatedAt = ? WHERE id = ?',
+        [i, now, categoryIds[i]]
+      );
+    }
   }
 };
 

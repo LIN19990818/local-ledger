@@ -7,6 +7,7 @@ export interface Category {
   type: TransactionType;
   isDefault: boolean;
   isVisible: boolean;
+  sortOrder: number;
   createdAt: number;
   updatedAt: number;
 }

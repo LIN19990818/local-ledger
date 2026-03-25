@@ -16,6 +16,7 @@ export const initNativeDatabase = async (): Promise<void> => {
       type TEXT NOT NULL,
       isDefault INTEGER NOT NULL DEFAULT 0,
       isVisible INTEGER NOT NULL DEFAULT 1,
+      sortOrder INTEGER NOT NULL DEFAULT 0,
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
@@ -90,21 +91,21 @@ export const initNativeDatabase = async (): Promise<void> => {
 };
 
 const defaultCategoriesData: Omit<Category, 'createdAt' | 'updatedAt'>[] = [
-  { id: 'food', name: '餐饮', icon: '🍜', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'transport', name: '交通', icon: '🚌', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'shopping', name: '购物', icon: '🛒', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'entertainment', name: '娱乐', icon: '🎮', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'medical', name: '医疗', icon: '💊', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'education', name: '教育', icon: '📚', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'housing', name: '住房', icon: '🏠', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'communication', name: '通讯', icon: '📱', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'other_expense', name: '其他支出', icon: '📦', type: 'expense', isDefault: true, isVisible: true },
-  { id: 'salary', name: '工资', icon: '💰', type: 'income', isDefault: true, isVisible: true },
-  { id: 'bonus', name: '奖金', icon: '🎁', type: 'income', isDefault: true, isVisible: true },
-  { id: 'investment', name: '投资收益', icon: '📈', type: 'income', isDefault: true, isVisible: true },
-  { id: 'parttime', name: '兼职', icon: '💼', type: 'income', isDefault: true, isVisible: true },
-  { id: 'reimbursement', name: '报销', icon: '🧾', type: 'income', isDefault: true, isVisible: true },
-  { id: 'other_income', name: '其他收入', icon: '💵', type: 'income', isDefault: true, isVisible: true },
+  { id: 'food', name: '餐饮', icon: '🍜', type: 'expense', isDefault: true, isVisible: true, sortOrder: 0 },
+  { id: 'transport', name: '交通', icon: '🚌', type: 'expense', isDefault: true, isVisible: true, sortOrder: 1 },
+  { id: 'shopping', name: '购物', icon: '🛒', type: 'expense', isDefault: true, isVisible: true, sortOrder: 2 },
+  { id: 'entertainment', name: '娱乐', icon: '🎮', type: 'expense', isDefault: true, isVisible: true, sortOrder: 3 },
+  { id: 'medical', name: '医疗', icon: '💊', type: 'expense', isDefault: true, isVisible: true, sortOrder: 4 },
+  { id: 'education', name: '教育', icon: '📚', type: 'expense', isDefault: true, isVisible: true, sortOrder: 5 },
+  { id: 'housing', name: '住房', icon: '🏠', type: 'expense', isDefault: true, isVisible: true, sortOrder: 6 },
+  { id: 'communication', name: '通讯', icon: '📱', type: 'expense', isDefault: true, isVisible: true, sortOrder: 7 },
+  { id: 'other_expense', name: '其他支出', icon: '📦', type: 'expense', isDefault: true, isVisible: true, sortOrder: 8 },
+  { id: 'salary', name: '工资', icon: '💰', type: 'income', isDefault: true, isVisible: true, sortOrder: 0 },
+  { id: 'bonus', name: '奖金', icon: '🎁', type: 'income', isDefault: true, isVisible: true, sortOrder: 1 },
+  { id: 'investment', name: '投资收益', icon: '📈', type: 'income', isDefault: true, isVisible: true, sortOrder: 2 },
+  { id: 'parttime', name: '兼职', icon: '💼', type: 'income', isDefault: true, isVisible: true, sortOrder: 3 },
+  { id: 'reimbursement', name: '报销', icon: '🧾', type: 'income', isDefault: true, isVisible: true, sortOrder: 4 },
+  { id: 'other_income', name: '其他收入', icon: '💵', type: 'income', isDefault: true, isVisible: true, sortOrder: 5 },
 ];
 
 const initDefaultData = async (): Promise<void> => {
@@ -125,9 +126,9 @@ const initDefaultData = async (): Promise<void> => {
     const existing = await db.getFirstAsync<{ id: string }>('SELECT id FROM categories WHERE id = ?', [category.id]);
     if (!existing) {
       await db.runAsync(
-        `INSERT INTO categories (id, name, icon, type, isDefault, isVisible, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [category.id, category.name, category.icon, category.type, category.isDefault ? 1 : 0, category.isVisible ? 1 : 0, now, now]
+        `INSERT INTO categories (id, name, icon, type, isDefault, isVisible, sortOrder, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [category.id, category.name, category.icon, category.type, category.isDefault ? 1 : 0, category.isVisible ? 1 : 0, category.sortOrder ?? 0, now, now]
       );
     }
   }
